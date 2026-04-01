@@ -1,6 +1,6 @@
 {
   "name": "doover-js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript client for Doover.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,11 +12,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/get-doover/doover-js.git"
+    "url": "https://github.com/getdoover/doover-js.git"
   },
-  "homepage": "https://github.com/get-doover/doover-js#readme",
+  "homepage": "https://github.com/getdoover/doover-js#readme",
   "bugs": {
-    "url": "https://github.com/get-doover/doover-js/issues"
+    "url": "https://github.com/getdoover/doover-js/issues"
   },
   "files": [
     "dist"
