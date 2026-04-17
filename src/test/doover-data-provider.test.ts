@@ -40,6 +40,8 @@ describe("DooverDataProvider", () => {
     await expect(provider.getAgents()).to.eventually.deep.equal({ agents: [] });
     expect(fetchMock.getCall(0).args[0]).to.equal("https://control.example.com/users/me");
     expect(fetchMock.getCall(1).args[0]).to.equal("https://control.example.com/agents");
+    expect((fetchMock.getCall(0).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal("internal");
+    expect((fetchMock.getCall(1).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal(null);
   });
 
   it("returns undefined for missing identifiers where expected", async () => {

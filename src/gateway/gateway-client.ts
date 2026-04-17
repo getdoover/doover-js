@@ -1,3 +1,4 @@
+import type { DooverAuth } from "../auth/doover-auth";
 import type { DooverClientConfig } from "../http/rest-client";
 import { DooverGatewayError } from "../http/errors";
 import { addTimestampToMessage } from "../utils/snowflake";
@@ -35,15 +36,36 @@ export class GatewayClient {
     heartbeatAck: new Set(),
   };
   private subscriptions = new Map<string, { channel: ChannelRef; diff_only: boolean }>();
+  private readonly auth: DooverAuth | null;
 
-  constructor(private readonly config: DooverClientConfig) {}
+  constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
+    this.auth = auth ?? null;
+  }
 
-  connect() {
+  async connect(): Promise<void> {
     if (this.socket && this.socket.readyState <= WebSocket.OPEN) {
       return;
     }
-    const WebSocketImpl = this.config.webSocketImpl ?? WebSocket;
-    this.socket = new WebSocketImpl(this.config.dataWssUrl);
+
+    if (this.auth) {
+      await this.auth.ensureReady();
+    }
+
+    const hasFactory = !!this.config.webSocketFactory;
+    const wsParams = this.auth
+      ? await this.auth.prepareWebSocket(this.config.dataWssUrl, hasFactory)
+      : { url: this.config.dataWssUrl };
+
+    if (this.config.webSocketFactory) {
+      this.socket = this.config.webSocketFactory({
+        url: wsParams.url,
+        headers: wsParams.headers,
+      });
+    } else {
+      const WebSocketImpl = this.config.webSocketImpl ?? WebSocket;
+      this.socket = new WebSocketImpl(wsParams.url);
+    }
+
     this.socket.onopen = () => this.emit("open");
     this.socket.onclose = (event) => {
       this.stopHeartbeat();
@@ -78,7 +100,7 @@ export class GatewayClient {
       diff_only: options?.diff_only ?? false,
     });
     if (!this.isConnected()) {
-      this.connect();
+      void this.connect();
       return;
     }
     this.send({
@@ -107,7 +129,7 @@ export class GatewayClient {
 
   syncChannel(channel: ChannelRef) {
     if (!this.isConnected()) {
-      this.connect();
+      void this.connect();
       return;
     }
     this.send({
@@ -121,7 +143,7 @@ export class GatewayClient {
 
   sendOneShotMessage(channel: ChannelRef, data: JSONValue) {
     if (!this.isConnected()) {
-      this.connect();
+      void this.connect();
       return;
     }
     this.send({
@@ -278,7 +300,7 @@ export class GatewayClient {
     }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect();
+      void this.connect();
     }, 1000);
   }
 

@@ -43,6 +43,26 @@ describe("RestClient", () => {
     expect(headers.get("X-Doover-Assume")).to.equal("user-2");
   });
 
+  it("can omit the sharing header for specific requests", async () => {
+    const fetchMock = createFetchMock();
+    const client = new RestClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+
+    await client.request({
+      path: "/agents",
+      baseUrl: "https://control.example.com",
+      omitSharingHeader: true,
+    });
+
+    const [, init] = fetchMock.getCall(0).args;
+    const headers = init?.headers as Headers;
+    expect(headers.get("X-Doover-Sharing")).to.equal(null);
+  });
+
   it("serializes JSON request bodies", async () => {
     const fetchMock = createFetchMock();
     const client = new RestClient({

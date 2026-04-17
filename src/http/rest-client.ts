@@ -1,6 +1,8 @@
+import type { AuthConfig } from "../auth/build-auth";
+import type { DooverAuth } from "../auth/doover-auth";
 import { DooverApiError } from "./errors";
 
-export interface DooverClientConfig {
+export interface DooverClientConfig extends AuthConfig {
   dataRestUrl: string;
   controlApiUrl: string;
   dataWssUrl: string;
@@ -9,6 +11,10 @@ export interface DooverClientConfig {
   impersonateUserStorageKey?: string;
   fetchImpl?: typeof fetch;
   webSocketImpl?: typeof WebSocket;
+  webSocketFactory?: (options: {
+    url: string;
+    headers?: Record<string, string>;
+  }) => WebSocket;
 }
 
 export interface RequestOptions {
@@ -18,6 +24,7 @@ export interface RequestOptions {
   query?: QueryParams;
   body?: BodyInit | object | null;
   headers?: HeadersInit;
+  omitSharingHeader?: boolean;
 }
 
 type QueryValue =
@@ -37,9 +44,11 @@ export class RestClient {
       "dataRestUrl" | "controlApiUrl" | "dataWssUrl" | "sharing" | "impersonateUserStorageKey"
     >
   > &
-    Pick<DooverClientConfig, "organisationId" | "fetchImpl" | "webSocketImpl">;
+    Pick<DooverClientConfig, "organisationId" | "fetchImpl" | "webSocketImpl" | "webSocketFactory">;
 
-  constructor(config: DooverClientConfig) {
+  readonly auth: DooverAuth | null;
+
+  constructor(config: DooverClientConfig, auth?: DooverAuth) {
     this.config = {
       ...config,
       sharing: config.sharing ?? "internal",
@@ -47,15 +56,30 @@ export class RestClient {
       impersonateUserStorageKey:
         config.impersonateUserStorageKey ?? "impersonate_user_id",
     };
+    this.auth = auth ?? null;
   }
 
   async request<T>(options: RequestOptions): Promise<T> {
+    if (this.auth) {
+      await this.auth.ensureReady();
+    }
+
     const method = options.method ?? "GET";
     const url = this.buildUrl(options.baseUrl ?? this.config.dataRestUrl, options.path, options.query);
     const headers = new Headers(options.headers);
     const body = this.normalizeBody(options.body, headers);
 
-    headers.set("X-Doover-Sharing", this.config.sharing);
+    // Merge auth headers.
+    if (this.auth) {
+      const authHeaders = await this.auth.getHttpHeaders();
+      for (const [key, value] of Object.entries(authHeaders)) {
+        headers.set(key, value);
+      }
+    }
+
+    if (!options.omitSharingHeader) {
+      headers.set("X-Doover-Sharing", this.config.sharing);
+    }
     if (this.config.organisationId) {
       headers.set("X-Doover-Organisation", this.config.organisationId);
     }
@@ -64,12 +88,16 @@ export class RestClient {
       headers.set("X-Doover-Assume", impersonated);
     }
 
+    const credentials = this.auth
+      ? this.auth.getFetchCredentials()
+      : "include";
+
     const fetchImpl = this.config.fetchImpl ?? fetch;
     const response = await fetchImpl(url, {
       method,
       headers,
       body,
-      credentials: "include",
+      credentials,
     });
 
     const payload = await this.parseResponse(response);

@@ -11,6 +11,16 @@ export { PermissionsApi } from "./apis/permissions-api";
 export { ProcessorsApi } from "./apis/processors-api";
 export { TurnApi } from "./apis/turn-api";
 
+export { DooverAuth } from "./auth/doover-auth";
+export { CookieAuth } from "./auth/cookie-auth";
+export { DooverTokenAuth } from "./auth/doover-token-auth";
+export { AuthProfile } from "./auth/auth-profile";
+export type { AuthProfileData } from "./auth/auth-profile";
+export type { AuthProfileStore } from "./auth/auth-store";
+export { DooverAuthError } from "./auth/errors";
+export { buildAuth } from "./auth/build-auth";
+export type { AuthConfig } from "./auth/build-auth";
+
 export { GatewayClient } from "./gateway/gateway-client";
 export type * from "./gateway/types";
 

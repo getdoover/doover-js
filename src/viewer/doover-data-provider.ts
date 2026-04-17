@@ -3,6 +3,7 @@ import { AggregatesApi } from "../apis/aggregates-api";
 import { ChannelsApi } from "../apis/channels-api";
 import { ConnectionsApi } from "../apis/connections-api";
 import { MessagesApi } from "../apis/messages-api";
+import type { DooverAuth } from "../auth/doover-auth";
 import { GatewayClient } from "../gateway/gateway-client";
 import { DooverValidationError } from "../http/errors";
 import { RestClient, type DooverClientConfig } from "../http/rest-client";
@@ -41,9 +42,9 @@ export class DooverDataProvider
   readonly connectionsApi: ConnectionsApi;
   private readonly subscriptions = new Map<string, SubscriptionEntry[]>();
 
-  constructor(private readonly config: DooverClientConfig) {
-    this.rest = new RestClient(config);
-    this.gateway = new GatewayClient(config);
+  constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
+    this.rest = new RestClient(config, auth);
+    this.gateway = new GatewayClient(config, auth);
     this.agentsApi = new AgentsApi(this.rest);
     this.channelsApi = new ChannelsApi(this.rest);
     this.messagesApi = new MessagesApi(this.rest);
@@ -76,7 +77,11 @@ export class DooverDataProvider
   }
 
   getAgents(): Promise<AgentsResponse> {
-    return this.rest.get<AgentsResponse>("/agents", undefined, this.config.controlApiUrl);
+    return this.rest.request<AgentsResponse>({
+      path: "/agents",
+      baseUrl: this.config.controlApiUrl,
+      omitSharingHeader: true,
+    });
   }
 
   async getChannels(
@@ -137,7 +142,7 @@ export class DooverDataProvider
     const entries = this.subscriptions.get(key) ?? [];
     entries.push({ messageCallback: callback, aggregateCallback });
     this.subscriptions.set(key, entries);
-    this.gateway.connect();
+    await this.gateway.connect();
     this.gateway.subscribe({
       agent_id: validated.agentId,
       name: validated.channelName,
