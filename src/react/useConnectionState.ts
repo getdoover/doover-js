@@ -14,12 +14,15 @@ export interface ConnectionState {
   latencyMs: number | null;
   /** Timestamp of the most recent `Ready` frame, or `null` until the first one. */
   lastOpenedAt: number | null;
+  /** Timestamp of the most recent heartbeat ack, or `null` until the first one. */
+  lastPingAt: number | null;
 }
 
 const INITIAL: ConnectionState = {
   status: "connecting",
   latencyMs: null,
   lastOpenedAt: null,
+  lastPingAt: null,
 };
 
 /**
@@ -34,6 +37,7 @@ export function useConnectionState(): ConnectionState {
           status: "open",
           latencyMs: client.gateway.getLatency(),
           lastOpenedAt: Date.now(),
+          lastPingAt: null,
         }
       : INITIAL,
   );
@@ -48,7 +52,11 @@ export function useConnectionState(): ConnectionState {
     const onClose = () =>
       setState((prev) => ({ ...prev, status: "connecting" }));
     const onHeartbeatAck = (latency: number | null) =>
-      setState((prev) => ({ ...prev, latencyMs: latency }));
+      setState((prev) => ({
+        ...prev,
+        latencyMs: latency,
+        lastPingAt: Date.now(),
+      }));
 
     client.gateway.on("ready", onReady);
     client.gateway.on("close", onClose);
