@@ -149,3 +149,34 @@ export interface DataSeries {
   count: number;
   results: DataSeriesResult[];
 }
+
+/**
+ * Lifecycle status for an RPC. `pending` carries arbitrary intermediate
+ * payloads (progress updates) emitted by the server while the request is
+ * in flight.
+ */
+export type RpcStatus<TPending = undefined> =
+  | { code: "awaiting_confirmation" }
+  | { code: "sent" }
+  | { code: "acknowledged"; message: { timestamp: number } }
+  | { code: "error"; message: string | object }
+  | { code: "deferred"; message: { until: number; at: number } }
+  | { code: "pending"; message: TPending }
+  | { code: "success" };
+
+/** Shape a consumer posts to initiate an RPC. */
+export interface RpcRequest<TRequest = object> {
+  app_key?: string;
+  method: string;
+  request: TRequest;
+}
+
+/** Shape of the message the server maintains as the RPC progresses. */
+export interface RpcMessageData<
+  TRequest = object,
+  TResponse = object,
+  TPending = undefined,
+> extends RpcRequest<TRequest> {
+  status: RpcStatus<TPending>;
+  response: TResponse;
+}

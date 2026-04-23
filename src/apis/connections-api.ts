@@ -49,4 +49,16 @@ export class ConnectionsApi {
       `/agents/${agentId}/channels/${channelName}/subscriptions`,
     );
   }
+
+  /**
+   * Ask the server to push the latest state of all channels this agent
+   * owns to every active WSS connection. Used to recover from missed updates
+   * after a gap in connectivity.
+   */
+  syncConnection(agentId: string) {
+    return this.rest.post<unknown>(
+      `/agents/${agentId}/connection_sync`,
+      {},
+    );
+  }
 }

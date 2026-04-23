@@ -118,6 +118,29 @@ describe("DooverDataProvider", () => {
     );
   });
 
+  it("forwards listMessages options (limit, after, field_name)", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse([]));
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    await provider.getMessages(
+      { agentId: "a1", channelName: "c1" },
+      { before: "b1", after: "a1", limit: 50, field_name: ["x", "y"] },
+    );
+
+    const url = fetchMock.getCall(0).args[0] as string;
+    expect(url).to.include("before=b1");
+    expect(url).to.include("after=a1");
+    expect(url).to.include("limit=50");
+    expect(url).to.include("field_name=x");
+    expect(url).to.include("field_name=y");
+  });
+
   it("prefers channel aggregate data and falls back to the aggregate endpoint", async () => {
     const fetchMock = createFetchMock((url) => {
       if (url.endsWith("/channels/c1")) {
@@ -267,5 +290,160 @@ describe("DooverDataProvider", () => {
       identifier: { agentId: "a1", channelName: "c1" },
       aggregatePath: "path/to/value",
     });
+  });
+
+  it("sendRPC posts an rpc message, correlates the response by id, and resolves on success", async () => {
+    const rpcId = generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fetchMock = createFetchMock((url) => {
+      if (url.endsWith("/messages")) {
+        return createJsonResponse({
+          id: rpcId,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: {
+            type: "rpc",
+            method: "ping",
+            request: {},
+            status: { code: "sent" },
+            response: {},
+          },
+          attachments: [],
+        });
+      }
+      return createJsonResponse({});
+    });
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const statuses: string[] = [];
+    const promise = provider.sendRPC<object, { pong: true }>(
+      { agentId: "a1", channelName: "c1" },
+      { method: "ping", request: {} },
+      { onStatus: (status) => statuses.push(status.code) },
+    );
+
+    // Let subscribe + POST resolve.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const ws = MockWebSocket.instances[0];
+    ws.open();
+    ws.receive({ op: 0, t: "Hello", d: {} });
+    ws.receive({
+      op: 0,
+      t: "Ready",
+      d: { session_id: "s1", session_token: "t1", subscriptions: [] },
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    // Progress updates.
+    ws.receive({
+      op: 0,
+      t: "MessageUpdate",
+      d: {
+        id: rpcId,
+        author_id: "u1",
+        channel: { agent_id: "a1", name: "c1" },
+        data: {
+          type: "rpc",
+          method: "ping",
+          request: {},
+          status: { code: "acknowledged", message: { timestamp: 1 } },
+          response: {},
+        },
+        attachments: [],
+        request_data: {},
+      },
+    });
+    ws.receive({
+      op: 0,
+      t: "MessageUpdate",
+      d: {
+        id: rpcId,
+        author_id: "u1",
+        channel: { agent_id: "a1", name: "c1" },
+        data: {
+          type: "rpc",
+          method: "ping",
+          request: {},
+          status: { code: "success" },
+          response: { pong: true },
+        },
+        attachments: [],
+        request_data: {},
+      },
+    });
+
+    await expect(promise).to.eventually.deep.equal({ pong: true });
+    expect(statuses).to.deep.equal(["acknowledged", "success"]);
+  });
+
+  it("sendRPC rejects with the status message on error", async () => {
+    const rpcId = generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fetchMock = createFetchMock((url) => {
+      if (url.endsWith("/messages")) {
+        return createJsonResponse({
+          id: rpcId,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: {
+            type: "rpc",
+            method: "ping",
+            request: {},
+            status: { code: "sent" },
+            response: {},
+          },
+          attachments: [],
+        });
+      }
+      return createJsonResponse({});
+    });
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const promise = provider.sendRPC(
+      { agentId: "a1", channelName: "c1" },
+      { method: "ping", request: {} },
+    );
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const ws = MockWebSocket.instances[0];
+    ws.open();
+    ws.receive({ op: 0, t: "Hello", d: {} });
+    ws.receive({
+      op: 0,
+      t: "Ready",
+      d: { session_id: "s1", session_token: "t1", subscriptions: [] },
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    ws.receive({
+      op: 0,
+      t: "MessageUpdate",
+      d: {
+        id: rpcId,
+        author_id: "u1",
+        channel: { agent_id: "a1", name: "c1" },
+        data: {
+          type: "rpc",
+          method: "ping",
+          request: {},
+          status: { code: "error", message: "boom" },
+          response: {},
+        },
+        attachments: [],
+        request_data: {},
+      },
+    });
+
+    await expect(promise).to.eventually.be.rejectedWith("boom");
   });
 });
