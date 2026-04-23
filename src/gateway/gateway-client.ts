@@ -12,6 +12,9 @@ import type { ChannelRef, JSONValue } from "../types/common";
 
 type ListenerSet<K extends keyof GatewayListenerMap> = Set<GatewayListenerMap[K]>;
 
+const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_CAP_MS = 30_000;
+
 export class GatewayClient {
   private socket: WebSocket | null = null;
   private session: WebSocketSession | null = null;
@@ -19,6 +22,9 @@ export class GatewayClient {
   private lastHeartbeatAt: number | null = null;
   private missedHeartbeats = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  /** Set when the consumer explicitly disconnects — suppresses reconnect. */
+  private explicitlyDisconnected = false;
   private listeners: { [K in keyof GatewayListenerMap]: ListenerSet<K> } = {
     ready: new Set(),
     channelSync: new Set(),
@@ -40,9 +46,11 @@ export class GatewayClient {
 
   constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
     this.auth = auth ?? null;
+    this.installLifecycleListeners();
   }
 
   async connect(): Promise<void> {
+    this.explicitlyDisconnected = false;
     if (this.socket && this.socket.readyState <= WebSocket.OPEN) {
       return;
     }
@@ -77,11 +85,13 @@ export class GatewayClient {
   }
 
   disconnect(code?: number, reason?: string) {
+    this.explicitlyDisconnected = true;
     this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.reconnectAttempts = 0;
     this.socket?.close(code, reason);
     this.socket = null;
   }
@@ -190,6 +200,7 @@ export class GatewayClient {
         this.startHeartbeat();
         break;
       case "Ready":
+        this.reconnectAttempts = 0;
         this.session = message.d;
         this.emit("ready", message.d);
         this.resubscribeAll();
@@ -295,13 +306,58 @@ export class GatewayClient {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) {
+    if (this.reconnectTimer || this.explicitlyDisconnected) {
       return;
     }
+    const delay = this.computeReconnectDelay();
+    this.reconnectAttempts += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.connect();
-    }, 1000);
+    }, delay);
+  }
+
+  /** Exponential backoff with full-jitter, capped at RECONNECT_CAP_MS. */
+  private computeReconnectDelay() {
+    const exp = Math.min(
+      RECONNECT_CAP_MS,
+      RECONNECT_BASE_MS * 2 ** this.reconnectAttempts,
+    );
+    return Math.floor(Math.random() * exp);
+  }
+
+  private installLifecycleListeners() {
+    if (this.config.disableBrowserLifecycleHooks) return;
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    }
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("online", this.handleOnline);
+    }
+  }
+
+  private handleVisibilityChange = () => {
+    if (typeof document === "undefined") return;
+    if (document.visibilityState !== "visible") return;
+    this.tryImmediateReconnect();
+  };
+
+  private handleOnline = () => {
+    this.tryImmediateReconnect();
+  };
+
+  /**
+   * Called by lifecycle hooks when we have a strong signal that the network
+   * or tab has come back — skip the backoff schedule and reconnect now.
+   */
+  private tryImmediateReconnect() {
+    if (this.explicitlyDisconnected) return;
+    if (this.isConnected()) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    void this.connect();
   }
 
   private channelKey(channel: ChannelRef) {

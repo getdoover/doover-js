@@ -248,4 +248,149 @@ describe("GatewayClient", () => {
     expect(cancelled.calledOnce).to.equal(true);
     expect(client.getSession()).to.equal(null);
   });
+
+  it("reconnects with exponential backoff + jitter on unexpected close", () => {
+    // Make jitter deterministic: Math.random() → 1 means "wait the full backoff window".
+    const randomStub = sinon.stub(Math, "random").returns(1);
+
+    const client = new GatewayClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    client.connect();
+    MockWebSocket.instances[0].open();
+    MockWebSocket.instances[0].close(1006, "transport closed");
+
+    // 1st attempt: ~1s window
+    sinon.clock.tick(999);
+    expect(MockWebSocket.instances.length).to.equal(1);
+    sinon.clock.tick(1);
+    expect(MockWebSocket.instances.length).to.equal(2);
+
+    MockWebSocket.instances[1].open();
+    MockWebSocket.instances[1].close(1006, "transport closed");
+
+    // 2nd attempt: ~2s window
+    sinon.clock.tick(1999);
+    expect(MockWebSocket.instances.length).to.equal(2);
+    sinon.clock.tick(1);
+    expect(MockWebSocket.instances.length).to.equal(3);
+
+    // Successful Ready should reset the attempt counter.
+    MockWebSocket.instances[2].open();
+    MockWebSocket.instances[2].receive({ op: 0, t: "Hello", d: {} });
+    MockWebSocket.instances[2].receive({
+      op: 0,
+      t: "Ready",
+      d: { session_id: "s1", session_token: "token", subscriptions: [] },
+    });
+    MockWebSocket.instances[2].close(1006, "transport closed");
+
+    sinon.clock.tick(999);
+    expect(MockWebSocket.instances.length).to.equal(3);
+    sinon.clock.tick(1);
+    expect(MockWebSocket.instances.length).to.equal(4);
+
+    randomStub.restore();
+  });
+
+  it("reconnects immediately on visibilitychange → visible", () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      visibilityState: "hidden" as DocumentVisibilityState,
+      addEventListener: (event: string, handler: EventListener) => {
+        listeners.set(event, handler);
+      },
+      removeEventListener: (event: string) => {
+        listeners.delete(event);
+      },
+    };
+    Object.defineProperty(globalThis, "document", {
+      value: fakeDocument,
+      configurable: true,
+      writable: true,
+    });
+
+    sinon.stub(Math, "random").returns(1);
+
+    const client = new GatewayClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    client.connect();
+    MockWebSocket.instances[0].open();
+    MockWebSocket.instances[0].close(1006, "transport closed");
+
+    // Pending backoff would wait up to 1s.
+    expect(MockWebSocket.instances.length).to.equal(1);
+
+    // Tab returns to visible — bypass backoff, reconnect now.
+    fakeDocument.visibilityState = "visible";
+    listeners.get("visibilitychange")?.(new Event("visibilitychange"));
+    expect(MockWebSocket.instances.length).to.equal(2);
+
+    // @ts-expect-error — cleanup test global
+    delete globalThis.document;
+  });
+
+  it("skips lifecycle listeners when disableBrowserLifecycleHooks is true", () => {
+    const addSpy = sinon.spy();
+    const fakeDocument = {
+      visibilityState: "visible" as DocumentVisibilityState,
+      addEventListener: addSpy,
+      removeEventListener: sinon.spy(),
+    };
+    Object.defineProperty(globalThis, "document", {
+      value: fakeDocument,
+      configurable: true,
+      writable: true,
+    });
+
+    new GatewayClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      disableBrowserLifecycleHooks: true,
+    });
+
+    expect(addSpy.called).to.equal(false);
+    // @ts-expect-error — cleanup test global
+    delete globalThis.document;
+  });
+
+  it("caps backoff at 30s and does not reconnect after explicit disconnect", () => {
+    const randomStub = sinon.stub(Math, "random").returns(1);
+
+    const client = new GatewayClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    client.connect();
+    // Force many failed attempts to push backoff past the cap.
+    for (let i = 0; i < 10; i += 1) {
+      const ws = MockWebSocket.instances[i];
+      ws.open();
+      ws.close(1006, "transport closed");
+      sinon.clock.tick(30_000);
+    }
+    // After 10 attempts we should have 11 sockets, and the delay never exceeds 30s.
+    expect(MockWebSocket.instances.length).to.equal(11);
+
+    // Explicit disconnect must not schedule a further reconnect.
+    client.disconnect();
+    sinon.clock.tick(60_000);
+    expect(MockWebSocket.instances.length).to.equal(11);
+
+    randomStub.restore();
+  });
 });

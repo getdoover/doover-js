@@ -15,6 +15,12 @@ export interface DooverClientConfig extends AuthConfig {
     url: string;
     headers?: Record<string, string>;
   }) => WebSocket;
+  /**
+   * When true, disables the GatewayClient's browser lifecycle listeners
+   * (visibilitychange, online). Defaults to false — hooks are on by default
+   * in browsers and automatically skipped in non-browser environments.
+   */
+  disableBrowserLifecycleHooks?: boolean;
 }
 
 export interface RequestOptions {
