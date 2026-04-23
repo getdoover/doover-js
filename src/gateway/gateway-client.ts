@@ -1,4 +1,5 @@
 import type { DooverAuth } from "../auth/doover-auth";
+import type { DooverStatsCollector } from "../client/stats";
 import type { DooverClientConfig } from "../http/rest-client";
 import { DooverGatewayError } from "../http/errors";
 import { addTimestampToMessage } from "../utils/snowflake";
@@ -18,10 +19,6 @@ const RECONNECT_CAP_MS = 30_000;
 export class GatewayClient {
   private socket: WebSocket | null = null;
   private session: WebSocketSession | null = null;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private lastHeartbeatAt: number | null = null;
-  private lastLatencyMs: number | null = null;
-  private missedHeartbeats = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   /** Set when the consumer explicitly disconnects — suppresses reconnect. */
@@ -42,14 +39,19 @@ export class GatewayClient {
     sessionCancelled: new Set(),
     open: new Set(),
     close: new Set(),
-    heartbeatAck: new Set(),
   };
   private subscriptions = new Map<string, { channel: ChannelRef; diff_only: boolean }>();
   private readonly auth: DooverAuth | null;
+  private stats: DooverStatsCollector | null = null;
 
   constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
     this.auth = auth ?? null;
     this.installLifecycleListeners();
+  }
+
+  /** Attach a stats collector. Call with `null` to detach. */
+  setStats(stats: DooverStatsCollector | null): void {
+    this.stats = stats;
   }
 
   async connect(): Promise<void> {
@@ -102,7 +104,6 @@ export class GatewayClient {
 
     socket.onopen = () => this.emit("open");
     socket.onclose = (event) => {
-      this.stopHeartbeat();
       this.emit("close", event);
       this.scheduleReconnect();
     };
@@ -112,7 +113,6 @@ export class GatewayClient {
 
   disconnect(code?: number, reason?: string) {
     this.explicitlyDisconnected = true;
-    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -195,16 +195,18 @@ export class GatewayClient {
     return this.session;
   }
 
-  /**
-   * Round-trip time of the most recent heartbeat (ms). Null until the
-   * first ack lands.
-   */
-  getLatency() {
-    return this.lastLatencyMs;
-  }
-
   isConnected() {
     return this.socket?.readyState === WebSocket.OPEN;
+  }
+
+  /** Number of channels the gateway is currently subscribed to. */
+  getSubscriptionCount(): number {
+    return this.subscriptions.size;
+  }
+
+  /** Snapshot of currently subscribed channels (for debug/inspection). */
+  getSubscriptions(): ChannelRef[] {
+    return [...this.subscriptions.values()].map((s) => s.channel);
   }
 
   /**
@@ -213,7 +215,6 @@ export class GatewayClient {
    * "reconnect now" control in debug UIs.
    */
   async reconnect(): Promise<void> {
-    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -234,14 +235,8 @@ export class GatewayClient {
   }
 
   private handleMessage(raw: string) {
+    this.stats?.recordGatewayReceived();
     const message = JSON.parse(raw) as GatewayInboundMessage;
-    if (message.op === 2) {
-      this.missedHeartbeats = 0;
-      this.lastLatencyMs =
-        this.lastHeartbeatAt === null ? null : Date.now() - this.lastHeartbeatAt;
-      this.emit("heartbeatAck", this.lastLatencyMs);
-      return;
-    }
     if (message.op === 3) {
       this.session = null;
       this.emit("sessionCancelled");
@@ -254,7 +249,6 @@ export class GatewayClient {
     switch (message.t) {
       case "Hello":
         this.identifyOrResume();
-        this.startHeartbeat();
         break;
       case "Ready":
         this.reconnectAttempts = 0;
@@ -322,35 +316,12 @@ export class GatewayClient {
     }
   }
 
-  private startHeartbeat() {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-      this.lastHeartbeatAt = Date.now();
-      this.missedHeartbeats += 1;
-      if (this.missedHeartbeats > 3) {
-        this.socket.close(4000, "Missed heartbeats");
-        return;
-      }
-      this.send({ op: 1, d: {} });
-    }, 20000);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-    this.missedHeartbeats = 0;
-  }
-
   private send(payload: Record<string, unknown>) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       throw new DooverGatewayError("WebSocket is not connected");
     }
     this.socket.send(JSON.stringify(payload));
+    this.stats?.recordGatewaySent();
   }
 
   private emit<K extends keyof GatewayListenerMap>(

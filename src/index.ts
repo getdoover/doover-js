@@ -4,6 +4,12 @@ export {
   peekDooverClient,
   resetDooverClient,
 } from "./client/singleton";
+export { DooverStatsCollector } from "./client/stats";
+export type {
+  DooverStatsSnapshot,
+  RestStatsSnapshot,
+  GatewayStatsSnapshot,
+} from "./client/stats";
 
 export { AgentsApi } from "./apis/agents-api";
 export { AggregatesApi } from "./apis/aggregates-api";

@@ -10,24 +10,24 @@ export interface ConnectionState {
    * `"connecting"` any time the socket is reconnecting or awaiting Ready.
    */
   status: ConnectionStatus;
-  /** Round-trip latency from the last heartbeat ack, in ms. `null` until the first ack. */
-  latencyMs: number | null;
   /** Timestamp of the most recent `Ready` frame, or `null` until the first one. */
   lastOpenedAt: number | null;
-  /** Timestamp of the most recent heartbeat ack, or `null` until the first one. */
-  lastPingAt: number | null;
 }
 
 const INITIAL: ConnectionState = {
   status: "connecting",
-  latencyMs: null,
   lastOpenedAt: null,
-  lastPingAt: null,
 };
 
 /**
  * Subscribes to the gateway's connection lifecycle and returns a snapshot
  * suitable for a connection-indicator UI.
+ *
+ * The gateway doesn't measure application-level latency — liveness is
+ * handled at the WebSocket-protocol layer via ping/pong frames (opcodes
+ * 0x9 / 0xA) which browsers answer automatically but don't expose to JS.
+ * Dead connections surface as the `close` event, which we already handle
+ * via auto-reconnect.
  */
 export function useConnectionState(): ConnectionState {
   const client = useDooverClient();
@@ -35,9 +35,7 @@ export function useConnectionState(): ConnectionState {
     client.gateway.isConnected() && client.gateway.getSession()
       ? {
           status: "open",
-          latencyMs: client.gateway.getLatency(),
           lastOpenedAt: Date.now(),
-          lastPingAt: null,
         }
       : INITIAL,
   );
@@ -51,21 +49,13 @@ export function useConnectionState(): ConnectionState {
       }));
     const onClose = () =>
       setState((prev) => ({ ...prev, status: "connecting" }));
-    const onHeartbeatAck = (latency: number | null) =>
-      setState((prev) => ({
-        ...prev,
-        latencyMs: latency,
-        lastPingAt: Date.now(),
-      }));
 
     client.gateway.on("ready", onReady);
     client.gateway.on("close", onClose);
-    client.gateway.on("heartbeatAck", onHeartbeatAck);
 
     return () => {
       client.gateway.off("ready", onReady);
       client.gateway.off("close", onClose);
-      client.gateway.off("heartbeatAck", onHeartbeatAck);
     };
   }, [client]);
 
