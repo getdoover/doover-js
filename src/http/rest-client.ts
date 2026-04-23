@@ -1,5 +1,6 @@
 import type { AuthConfig } from "../auth/build-auth";
 import type { DooverAuth } from "../auth/doover-auth";
+import type { DooverStatsCollector } from "../client/stats";
 import { DooverApiError } from "./errors";
 
 export interface DooverClientConfig extends AuthConfig {
@@ -53,6 +54,7 @@ export class RestClient {
     Pick<DooverClientConfig, "organisationId" | "fetchImpl" | "webSocketImpl" | "webSocketFactory">;
 
   readonly auth: DooverAuth | null;
+  private stats: DooverStatsCollector | null = null;
 
   constructor(config: DooverClientConfig, auth?: DooverAuth) {
     this.config = {
@@ -65,7 +67,24 @@ export class RestClient {
     this.auth = auth ?? null;
   }
 
+  /** Attach a stats collector. Call with `null` to detach. */
+  setStats(stats: DooverStatsCollector | null): void {
+    this.stats = stats;
+  }
+
   async request<T>(options: RequestOptions): Promise<T> {
+    const startedAt = this.stats?.recordRestStart() ?? null;
+    try {
+      const payload = await this.doRequest<T>(options);
+      this.stats?.recordRestEnd(startedAt, true);
+      return payload;
+    } catch (err) {
+      this.stats?.recordRestEnd(startedAt, false);
+      throw err;
+    }
+  }
+
+  private async doRequest<T>(options: RequestOptions): Promise<T> {
     if (this.auth) {
       await this.auth.ensureReady();
     }

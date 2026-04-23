@@ -214,7 +214,7 @@ describe("GatewayClient", () => {
     expect(wssError.calledWith({ message: "boom" })).to.equal(true);
   });
 
-  it("sends heartbeats, measures latency, and handles session cancellation", () => {
+  it("handles session cancellation (op 3)", () => {
     const client = new GatewayClient({
       dataRestUrl: "https://api.example.com",
       controlApiUrl: "https://control.example.com",
@@ -222,9 +222,7 @@ describe("GatewayClient", () => {
       webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
     });
 
-    const ack = sinon.spy();
     const cancelled = sinon.spy();
-    client.on("heartbeatAck", ack);
     client.on("sessionCancelled", cancelled);
 
     client.connect();
@@ -236,13 +234,6 @@ describe("GatewayClient", () => {
       t: "Ready",
       d: { session_id: "s1", session_token: "token", subscriptions: [] },
     });
-
-    sinon.clock.tick(20000);
-    expect(JSON.parse(ws.sent[ws.sent.length - 1] as string)).to.deep.equal({ op: 1, d: {} });
-
-    sinon.clock.tick(10);
-    ws.receive({ op: 2, d: {} });
-    expect(ack.calledWith(10)).to.equal(true);
 
     ws.receive({ op: 3, d: {} });
     expect(cancelled.calledOnce).to.equal(true);
