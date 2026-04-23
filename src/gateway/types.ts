@@ -160,5 +160,4 @@ export interface GatewayListenerMap {
   sessionCancelled: () => void;
   open: () => void;
   close: (event: CloseEvent) => void;
-  heartbeatAck: (latencyMs: number | null) => void;
 }

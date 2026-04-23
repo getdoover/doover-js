@@ -1,0 +1,13 @@
+import type { Aggregate } from "../types/common";
+import { useChannelAggregate } from "./useChannelAggregate";
+
+/**
+ * Convenience wrapper around `useChannelAggregate` that accepts an agent id
+ * and channel name as separate arguments — the most common shape at call
+ * sites where the identifier isn't already a `ChannelIdentifier`.
+ */
+export function useAgentChannel<
+  TData extends Aggregate["data"] = Aggregate["data"],
+>(agentId: string | undefined, channelName: string) {
+  return useChannelAggregate<TData>({ agentId, channelName });
+}

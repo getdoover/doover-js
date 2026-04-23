@@ -27,4 +27,19 @@ describe("DooverClient", () => {
     expect(client.agents).to.exist;
     expect(client.gateway).to.exist;
   });
+
+  it("shares a single GatewayClient between client.gateway and client.viewer.gateway", () => {
+    const client = new DooverClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: createFetchMock() as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      disableBrowserLifecycleHooks: true,
+    });
+
+    // Regression: these used to be separate GatewayClient instances,
+    // each opening its own WebSocket on connect().
+    expect(client.gateway).to.equal(client.viewer.gateway);
+  });
 });

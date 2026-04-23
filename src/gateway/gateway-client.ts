@@ -1,4 +1,5 @@
 import type { DooverAuth } from "../auth/doover-auth";
+import type { DooverStatsCollector } from "../client/stats";
 import type { DooverClientConfig } from "../http/rest-client";
 import { DooverGatewayError } from "../http/errors";
 import { addTimestampToMessage } from "../utils/snowflake";
@@ -18,13 +19,12 @@ const RECONNECT_CAP_MS = 30_000;
 export class GatewayClient {
   private socket: WebSocket | null = null;
   private session: WebSocketSession | null = null;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private lastHeartbeatAt: number | null = null;
-  private missedHeartbeats = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   /** Set when the consumer explicitly disconnects — suppresses reconnect. */
   private explicitlyDisconnected = false;
+  /** Guards against concurrent connect() callers creating duplicate sockets. */
+  private opening = false;
   private listeners: { [K in keyof GatewayListenerMap]: ListenerSet<K> } = {
     ready: new Set(),
     channelSync: new Set(),
@@ -39,14 +39,19 @@ export class GatewayClient {
     sessionCancelled: new Set(),
     open: new Set(),
     close: new Set(),
-    heartbeatAck: new Set(),
   };
   private subscriptions = new Map<string, { channel: ChannelRef; diff_only: boolean }>();
   private readonly auth: DooverAuth | null;
+  private stats: DooverStatsCollector | null = null;
 
   constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
     this.auth = auth ?? null;
     this.installLifecycleListeners();
+  }
+
+  /** Attach a stats collector. Call with `null` to detach. */
+  setStats(stats: DooverStatsCollector | null): void {
+    this.stats = stats;
   }
 
   async connect(): Promise<void> {
@@ -54,7 +59,25 @@ export class GatewayClient {
     if (this.socket && this.socket.readyState <= WebSocket.OPEN) {
       return;
     }
+    // De-dupe concurrent callers. Without this, N simultaneous
+    // `subscribeToChannel(...)` calls each await auth, then each create
+    // their own socket — the last one wins `this.socket`, but the earlier
+    // sockets' `onmessage` handlers still fire and try to send() through
+    // `this.socket` (a newer, not-yet-open socket → throws). The flag is
+    // cleared synchronously as soon as the new socket is assigned in
+    // `openSocket`, so reconnects after close still work.
+    if (this.opening) {
+      return;
+    }
+    this.opening = true;
+    try {
+      await this.openSocket();
+    } finally {
+      this.opening = false;
+    }
+  }
 
+  private async openSocket(): Promise<void> {
     if (this.auth) {
       await this.auth.ensureReady();
     }
@@ -64,29 +87,32 @@ export class GatewayClient {
       ? await this.auth.prepareWebSocket(this.config.dataWssUrl, hasFactory)
       : { url: this.config.dataWssUrl };
 
+    let socket: WebSocket;
     if (this.config.webSocketFactory) {
-      this.socket = this.config.webSocketFactory({
+      socket = this.config.webSocketFactory({
         url: wsParams.url,
         headers: wsParams.headers,
       });
     } else {
       const WebSocketImpl = this.config.webSocketImpl ?? WebSocket;
-      this.socket = new WebSocketImpl(wsParams.url);
+      socket = new WebSocketImpl(wsParams.url);
     }
+    this.socket = socket;
+    // Release the concurrency gate synchronously now that the new socket is
+    // assigned — any subsequent connect() will see it via `this.socket`.
+    this.opening = false;
 
-    this.socket.onopen = () => this.emit("open");
-    this.socket.onclose = (event) => {
-      this.stopHeartbeat();
+    socket.onopen = () => this.emit("open");
+    socket.onclose = (event) => {
       this.emit("close", event);
       this.scheduleReconnect();
     };
-    this.socket.onerror = () => undefined;
-    this.socket.onmessage = (event) => this.handleMessage(event.data);
+    socket.onerror = () => undefined;
+    socket.onmessage = (event) => this.handleMessage(event.data);
   }
 
   disconnect(code?: number, reason?: string) {
     this.explicitlyDisconnected = true;
-    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -169,22 +195,48 @@ export class GatewayClient {
     return this.session;
   }
 
-  getLatency() {
-    return this.lastHeartbeatAt === null ? null : Date.now() - this.lastHeartbeatAt;
-  }
-
   isConnected() {
     return this.socket?.readyState === WebSocket.OPEN;
   }
 
-  private handleMessage(raw: string) {
-    const message = JSON.parse(raw) as GatewayInboundMessage;
-    if (message.op === 2) {
-      this.missedHeartbeats = 0;
-      const latency = this.lastHeartbeatAt === null ? null : Date.now() - this.lastHeartbeatAt;
-      this.emit("heartbeatAck", latency);
-      return;
+  /** Number of channels the gateway is currently subscribed to. */
+  getSubscriptionCount(): number {
+    return this.subscriptions.size;
+  }
+
+  /** Snapshot of currently subscribed channels (for debug/inspection). */
+  getSubscriptions(): ChannelRef[] {
+    return [...this.subscriptions.values()].map((s) => s.channel);
+  }
+
+  /**
+   * Force a fresh connection: close the current socket (without suppressing
+   * reconnects) and immediately open a new one. Useful for a manual
+   * "reconnect now" control in debug UIs.
+   */
+  async reconnect(): Promise<void> {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
+    this.reconnectAttempts = 0;
+    // Drop the session so the new socket identifies fresh (op 10) rather
+    // than attempting to resume a just-closed session (op 11) that the
+    // server has already torn down.
+    this.session = null;
+    if (this.socket) {
+      // Suppress the auto-reconnect path so we don't double-schedule.
+      const prev = this.socket;
+      prev.onclose = null;
+      prev.close(1000, "manual reconnect");
+      this.socket = null;
+    }
+    await this.connect();
+  }
+
+  private handleMessage(raw: string) {
+    this.stats?.recordGatewayReceived();
+    const message = JSON.parse(raw) as GatewayInboundMessage;
     if (message.op === 3) {
       this.session = null;
       this.emit("sessionCancelled");
@@ -197,7 +249,6 @@ export class GatewayClient {
     switch (message.t) {
       case "Hello":
         this.identifyOrResume();
-        this.startHeartbeat();
         break;
       case "Ready":
         this.reconnectAttempts = 0;
@@ -265,35 +316,12 @@ export class GatewayClient {
     }
   }
 
-  private startHeartbeat() {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-      this.lastHeartbeatAt = Date.now();
-      this.missedHeartbeats += 1;
-      if (this.missedHeartbeats > 3) {
-        this.socket.close(4000, "Missed heartbeats");
-        return;
-      }
-      this.send({ op: 1, d: {} });
-    }, 20000);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-    this.missedHeartbeats = 0;
-  }
-
   private send(payload: Record<string, unknown>) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       throw new DooverGatewayError("WebSocket is not connected");
     }
     this.socket.send(JSON.stringify(payload));
+    this.stats?.recordGatewaySent();
   }
 
   private emit<K extends keyof GatewayListenerMap>(
