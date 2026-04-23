@@ -197,6 +197,13 @@ describe("API clients", () => {
     await connections.getAgentSubscriptionHistory("a1", { channel: "{\"agent_id\":\"a1\",\"name\":\"c1\"}" });
     await connections.getConnection("conn");
     await connections.getChannelSubscriptions("a1", "c1");
+    await connections.syncConnection("a1");
+
+    const syncCall = fetchMock
+      .getCalls()
+      .find((call) => (call.args[0] as string).endsWith("/agents/a1/connection_sync"));
+    expect(syncCall).to.not.equal(undefined);
+    expect((syncCall!.args[1] as RequestInit).method).to.equal("POST");
 
     await notifications.getAgentNotifications("a1");
     await notifications.getAgentNotificationEndpoints("a1", "browser");
@@ -229,7 +236,7 @@ describe("API clients", () => {
     });
     await notifications.getWebPushPublicKey();
 
-    expect(fetchMock.callCount).to.equal(20);
+    expect(fetchMock.callCount).to.equal(21);
   });
 
   it("covers permissions, processors, and turn methods", async () => {
