@@ -1,4 +1,9 @@
 export { DooverClient } from "./client/doover-client";
+export {
+  getDooverClient,
+  peekDooverClient,
+  resetDooverClient,
+} from "./client/singleton";
 
 export { AgentsApi } from "./apis/agents-api";
 export { AggregatesApi } from "./apis/aggregates-api";

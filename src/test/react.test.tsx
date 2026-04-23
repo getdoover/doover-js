@@ -9,6 +9,8 @@ import { DooverClient } from "../client/doover-client";
 import {
   DooverProvider,
   channelAggregateQueryKey,
+  getSharedQueryClient,
+  resetSharedQueryClient,
   useAgentChannel,
   useAgentConnections,
   useChannelMessages,
@@ -219,11 +221,12 @@ describe("react bindings", () => {
       { wrapper: wrapper(client) },
     );
 
+    let mutationResult: { data: unknown } | undefined;
     await act(async () => {
-      await result.current.mutateAsync({ text: "hi" });
+      mutationResult = await result.current.mutateAsync({ text: "hi" });
     });
 
-    expect(result.current.data?.data).to.deep.equal({ text: "hi" });
+    expect(mutationResult?.data).to.deep.equal({ text: "hi" });
   });
 
   it("useUpdateAggregate patches and writes back to the channel aggregate cache", async () => {
@@ -339,6 +342,17 @@ describe("react bindings", () => {
         liveId,
       ]),
     );
+  });
+
+  it("getSharedQueryClient returns the same QueryClient across callers", () => {
+    resetSharedQueryClient();
+    const a = getSharedQueryClient();
+    const b = getSharedQueryClient();
+    expect(a).to.equal(b);
+    resetSharedQueryClient();
+    const c = getSharedQueryClient();
+    expect(c).to.not.equal(a);
+    resetSharedQueryClient();
   });
 
   it("useSendRpc tracks status history and resolves via sendRPC", async () => {
