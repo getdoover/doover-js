@@ -56,6 +56,10 @@ export class DooverClient {
     this.processors = new ProcessorsApi(this.rest);
     this.turn = new TurnApi(this.rest);
     this.agents = new AgentsApi(this.rest);
-    this.gateway = new GatewayClient(config, this.auth);
+    // Reuse the viewer's gateway so `client.gateway` and
+    // `client.viewer.gateway` are the same instance → one WebSocket per
+    // client. Without this, `client.gateway.connect()` and
+    // `client.viewer.subscribeToChannel(...)` each opened their own socket.
+    this.gateway = this.viewer.gateway;
   }
 }
