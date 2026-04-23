@@ -66,3 +66,8 @@ export type {
 } from "./useMultiAgentChannelMessages";
 
 export { useTurnCredentials } from "./useTurnCredentials";
+
+export {
+  getSharedQueryClient,
+  resetSharedQueryClient,
+} from "./sharedQueryClient";
