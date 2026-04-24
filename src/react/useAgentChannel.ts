@@ -6,8 +6,9 @@ import { useChannelAggregate } from "./useChannelAggregate";
  * and channel name as separate arguments — the most common shape at call
  * sites where the identifier isn't already a `ChannelIdentifier`.
  */
-export function useAgentChannel<
-  TData extends Aggregate["data"] = Aggregate["data"],
->(agentId: string | undefined, channelName: string) {
+export function useAgentChannel<TData = Aggregate["data"]>(
+  agentId: string | undefined,
+  channelName: string,
+) {
   return useChannelAggregate<TData>({ agentId, channelName });
 }

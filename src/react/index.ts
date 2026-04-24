@@ -18,6 +18,7 @@ export {
   useChannelAggregate,
   channelAggregateQueryKey,
 } from "./useChannelAggregate";
+export type { UseChannelAggregateResult } from "./useChannelAggregate";
 export { useAgentChannel } from "./useAgentChannel";
 
 export { useSendMessage } from "./useSendMessage";
