@@ -33,8 +33,8 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test:node": "mocha --require tsx/cjs \"src/test/**/*.test.ts\"",
-    "test:react": "mocha --require global-jsdom/register --require tsx/cjs \"src/test/**/*.test.tsx\"",
+    "test:node": "mocha --exit --require tsx/cjs \"src/test/**/*.test.ts\"",
+    "test:react": "mocha --exit --require global-jsdom/register --require tsx/cjs \"src/test/**/*.test.tsx\"",
     "test": "npm run test:node && npm run test:react"
   },
   "keywords": [
