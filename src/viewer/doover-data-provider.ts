@@ -1,5 +1,5 @@
 import { AgentsApi } from "../apis/agents-api";
-import { AggregatesApi } from "../apis/aggregates-api";
+import { AggregatesApi, type AggregateMutationParams } from "../apis/aggregates-api";
 import { ChannelsApi } from "../apis/channels-api";
 import { ConnectionsApi } from "../apis/connections-api";
 import { MessagesApi, type ListMessagesParams } from "../apis/messages-api";
@@ -342,21 +342,31 @@ export class DooverDataProvider
     });
   }
 
-  updateAggregate(identifier: ChannelIdentifier, message: object): Promise<Aggregate> {
+  updateAggregate(
+    identifier: ChannelIdentifier,
+    message: object,
+    params?: AggregateMutationParams,
+  ): Promise<Aggregate> {
     const validated = this.requireChannel(identifier);
     return this.aggregatesApi.patchAggregate(
       validated.agentId,
       validated.channelName,
       message as Record<string, unknown>,
+      params,
     );
   }
 
-  putAggregate(identifier: ChannelIdentifier, message: object): Promise<Aggregate> {
+  putAggregate(
+    identifier: ChannelIdentifier,
+    message: object,
+    params?: AggregateMutationParams,
+  ): Promise<Aggregate> {
     const validated = this.requireChannel(identifier);
     return this.aggregatesApi.putAggregate(
       validated.agentId,
       validated.channelName,
       message as Record<string, unknown>,
+      params,
     );
   }
 
