@@ -26,6 +26,13 @@ export interface UseMultiAgentChannelMessagesOptions {
   limit?: number;
   /** If false, skip live subscriptions per agent. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Restrict the returned messages to those whose payload contains any
+   * of these top-level field names. Forwarded as `field_name`.
+   */
+  fields?: string[];
+  /** Optional first-page `before` cursor (snowflake id). */
+  initialBefore?: string;
 }
 
 interface Page {
@@ -48,6 +55,8 @@ export function useMultiAgentChannelMessages(
   const queryClient = useQueryClient();
   const limit = options?.limit;
   const liveUpdates = options?.liveUpdates ?? true;
+  const fields = options?.fields;
+  const initialBefore = options?.initialBefore;
   const key = multiAgentChannelMessagesQueryKey(channelName, agentIds);
 
   const prependMessage = useCallback(
@@ -102,13 +111,14 @@ export function useMultiAgentChannelMessages(
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: initialBefore as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.next,
     queryFn: async ({ pageParam }) => {
       const page = await client.agents.getMultiAgentMessages(channelName, {
         agent_id: agentIds,
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
+        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
       });
       return page;
     },

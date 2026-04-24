@@ -22,6 +22,19 @@ export interface UseChannelMessagesOptions {
   limit?: number;
   /** If false, skip subscribing for live message-create updates. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Restrict the returned messages to those whose payload contains any of
+   * these top-level field names. Passed through as `field_name` on the
+   * REST call.
+   */
+  fields?: string[];
+  /**
+   * Optional first-page `before` cursor (snowflake id). Defaults to
+   * unset, which returns the latest messages. Use this when you need to
+   * guard against client-side clock skew (seed with a slightly-future
+   * snowflake so server-stamped messages don't get missed).
+   */
+  initialBefore?: string;
 }
 
 type Page<TData> = MessageStructure<TData>[];
@@ -48,6 +61,8 @@ export function useChannelMessages<TData = unknown>(
   const { agentId, channelName } = identifier;
   const limit = options?.limit;
   const liveUpdates = options?.liveUpdates ?? true;
+  const fields = options?.fields;
+  const initialBefore = options?.initialBefore;
   const key = channelMessagesQueryKey(agentId, channelName);
 
   const onMessage = useCallback(
@@ -73,13 +88,14 @@ export function useChannelMessages<TData = unknown>(
     queryKey: key,
     enabled: !!agentId && !!channelName,
     staleTime: Infinity,
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: initialBefore as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
     queryFn: async ({ pageParam }) => {
       const page = await client.viewer.getMessages(identifier, {
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
+        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
       });
       return (page ?? []) as Page<TData>;
     },

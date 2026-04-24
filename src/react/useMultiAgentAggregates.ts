@@ -8,6 +8,7 @@ import {
 import type { Aggregate } from "../types/common";
 import type { AgentAggregate } from "../types/openapi";
 import { useDooverClient } from "./context";
+import { channelAggregateQueryKey } from "./useChannelAggregate";
 
 export function multiAgentAggregatesQueryKey(
   channelName: string,
@@ -52,8 +53,24 @@ export function useMultiAgentAggregates(
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
-    queryFn: () =>
-      client.agents.getMultiAgentAggregates(channelName, { agent_id: agentIds }),
+    queryFn: async () => {
+      const response = await client.agents.getMultiAgentAggregates(
+        channelName,
+        { agent_id: agentIds },
+      );
+      // Seed the per-agent `channelAggregateQueryKey` cache so that
+      // sibling `useChannelAggregate(id, channelName)` calls for any
+      // of these agents get an instant cache hit rather than issuing
+      // a second fetch for data we already have.
+      for (const result of response.results) {
+        const { agent_id, ...aggregate } = result;
+        queryClient.setQueryData(
+          channelAggregateQueryKey(agent_id, channelName),
+          aggregate as Aggregate,
+        );
+      }
+      return response;
+    },
   });
 
   const patchAgentAggregate = useCallback(
@@ -73,6 +90,12 @@ export function useMultiAgentAggregates(
               : current.results.map((r, i) => (i === idx ? next : r));
           return { ...current, results };
         },
+      );
+      // Mirror live updates into the per-agent cache so sibling
+      // `useChannelAggregate` consumers see them too.
+      queryClient.setQueryData(
+        channelAggregateQueryKey(agentId, channelName),
+        aggregate,
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
