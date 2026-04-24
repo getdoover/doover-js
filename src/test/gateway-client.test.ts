@@ -124,12 +124,16 @@ describe("GatewayClient", () => {
       op: 0,
       t: "MessageUpdate",
       d: {
-        id,
-        author_id: "u1",
         channel: { agent_id: "a1", name: "c1" },
-        data: {},
-        attachments: [],
-        request_data: {},
+        author_id: "u1",
+        message: {
+          id,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: { full: true },
+          attachments: [],
+        },
+        request_data: { diff: true },
       },
     });
     ws.receive({
@@ -205,7 +209,12 @@ describe("GatewayClient", () => {
 
     expect(channelSync.calledOnce).to.equal(true);
     expect(messageCreate.calledWithMatch(sinon.match({ id, timestamp: sinon.match.number }))).to.equal(true);
-    expect(messageUpdate.calledWithMatch(sinon.match({ id, timestamp: sinon.match.number }))).to.equal(true);
+    expect(
+      messageUpdate.calledWithMatch(
+        sinon.match({ id, data: { full: true }, timestamp: sinon.match.number }),
+        sinon.match({ diff: true }),
+      ),
+    ).to.equal(true);
     expect(aggregateUpdate.calledOnce).to.equal(true);
     expect(alarmTrigger.calledOnce).to.equal(true);
     expect(oneShot.calledOnce).to.equal(true);

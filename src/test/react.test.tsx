@@ -413,18 +413,22 @@ describe("react bindings", () => {
         op: 0,
         t: "MessageUpdate",
         d: {
-          id: rpcId,
-          author_id: "u1",
           channel: { agent_id: "a1", name: "ui_cmds" },
-          data: {
-            type: "rpc",
-            method: "ping",
-            request: {},
-            status: { code: "success" },
-            response: { pong: true },
+          author_id: "u1",
+          message: {
+            id: rpcId,
+            author_id: "u1",
+            channel: { agent_id: "a1", name: "ui_cmds" },
+            data: {
+              type: "rpc",
+              method: "ping",
+              request: {},
+              status: { code: "success" },
+              response: { pong: true },
+            },
+            attachments: [],
           },
-          attachments: [],
-          request_data: {},
+          request_data: { status: { code: "success" }, response: { pong: true } },
         },
       });
       return promise;

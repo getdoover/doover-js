@@ -1,12 +1,20 @@
 import { useEffect, useRef } from "react";
 
-import type { Aggregate, MessageStructure } from "../types/common";
+import type { Aggregate, JSONValue, MessageStructure } from "../types/common";
 import type { ChannelIdentifier } from "../types/viewer";
 import { useDooverClient } from "./context";
 
 export interface ChannelSubscriptionHandlers {
   onMessage?: (message: MessageStructure) => void;
-  onMessageUpdate?: (message: MessageStructure) => void;
+  /**
+   * Fires on server-side MessageUpdate events. `message` is the full updated
+   * MessageStructure; `request_data` (optional) is the diff of what changed
+   * in this specific update. Most consumers only need `message`.
+   */
+  onMessageUpdate?: (
+    message: MessageStructure,
+    request_data?: JSONValue,
+  ) => void;
   onAggregate?: (aggregate: Aggregate) => void;
 }
 
@@ -35,8 +43,12 @@ export function useChannelSubscription(
     const aggregateCallback = (_id: ChannelIdentifier, aggregate: Aggregate) => {
       handlersRef.current.onAggregate?.(aggregate);
     };
-    const messageUpdateCallback = (_id: ChannelIdentifier, message: MessageStructure) => {
-      handlersRef.current.onMessageUpdate?.(message);
+    const messageUpdateCallback = (
+      _id: ChannelIdentifier,
+      message: MessageStructure,
+      request_data?: JSONValue,
+    ) => {
+      handlersRef.current.onMessageUpdate?.(message, request_data);
     };
 
     void client.viewer.subscribeToChannel(

@@ -344,36 +344,44 @@ describe("DooverDataProvider", () => {
       op: 0,
       t: "MessageUpdate",
       d: {
-        id: rpcId,
-        author_id: "u1",
         channel: { agent_id: "a1", name: "c1" },
-        data: {
-          type: "rpc",
-          method: "ping",
-          request: {},
-          status: { code: "acknowledged", message: { timestamp: 1 } },
-          response: {},
+        author_id: "u1",
+        message: {
+          id: rpcId,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: {
+            type: "rpc",
+            method: "ping",
+            request: {},
+            status: { code: "acknowledged", message: { timestamp: 1 } },
+            response: {},
+          },
+          attachments: [],
         },
-        attachments: [],
-        request_data: {},
+        request_data: { status: { code: "acknowledged", message: { timestamp: 1 } } },
       },
     });
     ws.receive({
       op: 0,
       t: "MessageUpdate",
       d: {
-        id: rpcId,
-        author_id: "u1",
         channel: { agent_id: "a1", name: "c1" },
-        data: {
-          type: "rpc",
-          method: "ping",
-          request: {},
-          status: { code: "success" },
-          response: { pong: true },
+        author_id: "u1",
+        message: {
+          id: rpcId,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: {
+            type: "rpc",
+            method: "ping",
+            request: {},
+            status: { code: "success" },
+            response: { pong: true },
+          },
+          attachments: [],
         },
-        attachments: [],
-        request_data: {},
+        request_data: { status: { code: "success" }, response: { pong: true } },
       },
     });
 
@@ -429,18 +437,22 @@ describe("DooverDataProvider", () => {
       op: 0,
       t: "MessageUpdate",
       d: {
-        id: rpcId,
-        author_id: "u1",
         channel: { agent_id: "a1", name: "c1" },
-        data: {
-          type: "rpc",
-          method: "ping",
-          request: {},
-          status: { code: "error", message: "boom" },
-          response: {},
+        author_id: "u1",
+        message: {
+          id: rpcId,
+          author_id: "u1",
+          channel: { agent_id: "a1", name: "c1" },
+          data: {
+            type: "rpc",
+            method: "ping",
+            request: {},
+            status: { code: "error", message: "boom" },
+            response: {},
+          },
+          attachments: [],
         },
-        attachments: [],
-        request_data: {},
+        request_data: { status: { code: "error", message: "boom" } },
       },
     });
 

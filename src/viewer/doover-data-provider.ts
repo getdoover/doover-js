@@ -11,6 +11,7 @@ import type {
   Aggregate,
   Channel,
   ConnectionDetails,
+  JSONValue,
   MessageStructure,
   RpcMessageData,
   RpcRequest,
@@ -50,9 +51,15 @@ interface SubscriptionEntry {
     identifier: ChannelIdentifier,
     aggregate: Aggregate,
   ) => void;
+  /**
+   * `message` is the full post-update MessageStructure (server-side `.message`
+   * field). `request_data` is the diff of just-changed fields, or undefined
+   * if the server didn't provide one. Most consumers only need `message`.
+   */
   messageUpdateCallback?: (
     identifier: ChannelIdentifier,
     message: MessageStructure,
+    request_data?: JSONValue,
   ) => void;
 }
 
@@ -82,11 +89,11 @@ export class DooverDataProvider
       const identifier = this.toIdentifier(message.channel.agent_id, message.channel.name);
       this.subscriptions.get(key)?.forEach((entry) => entry.messageCallback(identifier, message));
     });
-    this.gateway.on("messageUpdate", (message) => {
+    this.gateway.on("messageUpdate", (message, request_data) => {
       const key = this.channelKey(message.channel.agent_id, message.channel.name);
       const identifier = this.toIdentifier(message.channel.agent_id, message.channel.name);
       this.subscriptions.get(key)?.forEach((entry) =>
-        entry.messageUpdateCallback?.(identifier, message),
+        entry.messageUpdateCallback?.(identifier, message, request_data),
       );
     });
     this.gateway.on("channelSync", (event) => {

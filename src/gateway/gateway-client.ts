@@ -6,7 +6,6 @@ import { addTimestampToMessage } from "../utils/snowflake";
 import type {
   GatewayInboundMessage,
   GatewayListenerMap,
-  GatewayMessageUpdate,
   WebSocketSession,
 } from "./types";
 import type { ChannelRef, JSONValue } from "../types/common";
@@ -263,7 +262,11 @@ export class GatewayClient {
         this.emit("messageCreate", addTimestampToMessage(message.d));
         break;
       case "MessageUpdate":
-        this.emit("messageUpdate", addTimestampToMessage(message.d) as GatewayMessageUpdate["d"] & { timestamp: number });
+        this.emit(
+          "messageUpdate",
+          addTimestampToMessage(message.d.message),
+          message.d.request_data,
+        );
         break;
       case "AggregateUpdate":
         this.emit("aggregateUpdate", message.d);
