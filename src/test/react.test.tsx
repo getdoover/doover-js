@@ -164,7 +164,8 @@ describe("react bindings", () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).to.equal(true));
-    expect(result.current.data?.data).to.deep.equal({ x: 1 });
+    expect(result.current.data).to.deep.equal({ x: 1 });
+    expect(result.current.attachments).to.deep.equal([]);
 
     // Drive a live aggregate update.
     await act(async () => {
@@ -190,7 +191,7 @@ describe("react bindings", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.data?.data).to.deep.equal({ x: 2 }),
+      expect(result.current.data).to.deep.equal({ x: 2 }),
     );
   });
 
