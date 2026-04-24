@@ -46,10 +46,20 @@ export interface GatewayMessageCreate extends GatewayMessageBase {
   d: Omit<MessageStructure, "timestamp">;
 }
 
+/**
+ * `message` is the full post-update MessageStructure; `request_data` is the
+ * diff of just-changed fields. Consumers should read `message` for the
+ * current state and only touch `request_data` if they specifically need to
+ * know what changed in this update.
+ */
 export interface GatewayMessageUpdate extends GatewayMessageBase {
   op: 0;
   t: "MessageUpdate";
-  d: Omit<MessageStructure, "timestamp"> & {
+  d: {
+    channel: ChannelRef;
+    author_id: string;
+    organisation_id?: string;
+    message: Omit<MessageStructure, "timestamp">;
     request_data: JSONValue;
   };
 }
@@ -150,7 +160,10 @@ export interface GatewayListenerMap {
   ready: (event: GatewayReady["d"]) => void;
   channelSync: (event: GatewayChannelSync["d"]) => void;
   messageCreate: (event: MessageStructure) => void;
-  messageUpdate: (event: GatewayMessageUpdate["d"] & { timestamp: number }) => void;
+  messageUpdate: (
+    message: MessageStructure,
+    request_data: JSONValue | undefined,
+  ) => void;
   aggregateUpdate: (event: GatewayAggregateUpdate["d"]) => void;
   alarmTrigger: (event: GatewayAlarmTrigger["d"]) => void;
   oneShotMessage: (event: GatewayOneShotMessage["d"]) => void;
