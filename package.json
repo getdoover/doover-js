@@ -1,6 +1,6 @@
 {
   "name": "doover-js",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "TypeScript client for Doover.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
