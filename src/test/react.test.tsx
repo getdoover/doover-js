@@ -13,6 +13,7 @@ import {
   resetSharedQueryClient,
   useAgentChannel,
   useAgentConnections,
+  useChannelMessage,
   useChannelMessages,
   useConnectionState,
   useDooverClient,
@@ -342,6 +343,93 @@ describe("react bindings", () => {
         newId,
         liveId,
       ]),
+    );
+  });
+
+  it("useChannelMessage seeds via REST and patches on MessageUpdate", async () => {
+    const messageId = generateSnowflakeIdAtTime(
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    const otherId = generateSnowflakeIdAtTime(
+      new Date("2026-01-01T00:00:01.000Z"),
+    );
+
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        id: messageId,
+        author_id: "u1",
+        channel: { agent_id: "a1", name: "rpc" },
+        data: { method: "ping", response: { status: "pulling" } },
+        attachments: [],
+      }),
+    );
+    const client = new DooverClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      disableBrowserLifecycleHooks: true,
+    });
+
+    const { result } = renderHook(
+      () =>
+        useChannelMessage<{
+          method: string;
+          response?: { status: string };
+        }>({ agentId: "a1", channelName: "rpc" }, messageId),
+      { wrapper: wrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).to.equal(true));
+    expect(result.current.data?.response?.status).to.equal("pulling");
+    expect(result.current.message?.id).to.equal(messageId);
+
+    await act(async () => {
+      const ws = MockWebSocket.instances[0];
+      ws.open();
+      ws.receive({ op: 0, t: "Hello", d: {} });
+      ws.receive({
+        op: 0,
+        t: "Ready",
+        d: { session_id: "s1", session_token: "t1", subscriptions: [] },
+      });
+      // Update for an unrelated message — should be ignored.
+      ws.receive({
+        op: 0,
+        t: "MessageUpdate",
+        d: {
+          channel: { agent_id: "a1", name: "rpc" },
+          author_id: "u1",
+          message: {
+            id: otherId,
+            author_id: "u1",
+            channel: { agent_id: "a1", name: "rpc" },
+            data: { method: "ping", response: { status: "success" } },
+            attachments: [],
+          },
+        },
+      });
+      // Update for the message we're watching — should patch.
+      ws.receive({
+        op: 0,
+        t: "MessageUpdate",
+        d: {
+          channel: { agent_id: "a1", name: "rpc" },
+          author_id: "u1",
+          message: {
+            id: messageId,
+            author_id: "u1",
+            channel: { agent_id: "a1", name: "rpc" },
+            data: { method: "ping", response: { status: "success" } },
+            attachments: [],
+          },
+        },
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.data?.response?.status).to.equal("success"),
     );
   });
 

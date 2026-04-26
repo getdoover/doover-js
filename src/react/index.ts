@@ -39,6 +39,15 @@ export type {
   UseChannelMessagesResult,
 } from "./useChannelMessages";
 
+export {
+  useChannelMessage,
+  channelMessageQueryKey,
+} from "./useChannelMessage";
+export type {
+  UseChannelMessageOptions,
+  UseChannelMessageResult,
+} from "./useChannelMessage";
+
 export { useSendRpc } from "./useSendRpc";
 export type {
   RpcCommandId,
