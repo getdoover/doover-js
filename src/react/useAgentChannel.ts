@@ -1,5 +1,8 @@
 import type { Aggregate } from "../types/common";
-import { useChannelAggregate } from "./useChannelAggregate";
+import {
+  useChannelAggregate,
+  type UseChannelAggregateOptions,
+} from "./useChannelAggregate";
 
 /**
  * Convenience wrapper around `useChannelAggregate` that accepts an agent id
@@ -9,6 +12,7 @@ import { useChannelAggregate } from "./useChannelAggregate";
 export function useAgentChannel<TData = Aggregate["data"]>(
   agentId: string | undefined,
   channelName: string,
+  options?: UseChannelAggregateOptions,
 ) {
-  return useChannelAggregate<TData>({ agentId, channelName });
+  return useChannelAggregate<TData>({ agentId, channelName }, options);
 }
