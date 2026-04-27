@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-q
 
 import type { Aggregate } from "../types/common";
 import type { ChannelIdentifier } from "../types/viewer";
+import { DooverApiError } from "../http/errors";
 import { useDooverClient } from "./context";
 import { useChannelSubscription } from "./useChannelSubscription";
 
@@ -32,6 +33,23 @@ export interface UseChannelAggregateResult<TData>
   last_updated: number | null | undefined;
 }
 
+export interface UseChannelAggregateOptions {
+  /**
+   * Whether to fetch the initial aggregate over REST on mount.
+   *
+   * Defaults to `true` — the hook does a one-shot HTTP GET to seed the cache
+   * before the gateway WebSocket has connected, so the first paint isn't
+   * empty.
+   *
+   * Set to `false` for purely WS-driven consumers that don't want the REST
+   * round-trip (e.g. when the gateway's upsert-on-subscribe semantics make
+   * the REST call redundant or actively wrong, like channels that don't yet
+   * exist). The cache is then populated only by `ChannelSync` /
+   * `AggregateUpdate` events.
+   */
+  fetchInitial?: boolean;
+}
+
 /**
  * Fetch a channel's aggregate and keep it live via the gateway. Incoming
  * `channelSync` and `aggregateUpdate` events patch the react-query cache
@@ -45,11 +63,13 @@ export interface UseChannelAggregateResult<TData>
  */
 export function useChannelAggregate<TData = Aggregate["data"]>(
   identifier: ChannelIdentifier,
+  options?: UseChannelAggregateOptions,
 ): UseChannelAggregateResult<TData> {
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const { agentId, channelName } = identifier;
   const key = channelAggregateQueryKey(agentId, channelName);
+  const fetchInitial = options?.fetchInitial ?? true;
 
   const onAggregate = useCallback(
     (aggregate: Aggregate) => {
@@ -64,10 +84,18 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
 
   const query = useQuery({
     queryKey: key,
-    enabled: !!agentId && !!channelName,
+    enabled: fetchInitial && !!agentId && !!channelName,
     staleTime: Infinity,
     queryFn: () =>
       client.viewer.getAggregate(identifier) as Promise<Aggregate<TData> | undefined>,
+    // A 404 means the aggregate doesn't exist — retrying won't change that,
+    // and the caller needs the error promptly to render an empty/"not
+    // installed" state. Fall back to the react-query default (3 retries) for
+    // every other failure.
+    retry: (failureCount, error) => {
+      if (error instanceof DooverApiError && error.status === 404) return false;
+      return failureCount < 3;
+    },
   });
 
   const aggregate = query.data;
