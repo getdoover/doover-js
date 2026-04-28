@@ -35,22 +35,22 @@ export interface UseMultiAgentChannelMessagesOptions {
   initialBefore?: string;
 }
 
-interface Page {
-  results: MessageStructure[];
+interface Page<TData> {
+  results: MessageStructure<TData>[];
   next?: string;
 }
 
-export interface UseMultiAgentChannelMessagesResult
-  extends Omit<UseInfiniteQueryResult<InfiniteData<Page>>, "data"> {
-  messages: MessageStructure[];
-  data: InfiniteData<Page> | undefined;
+export interface UseMultiAgentChannelMessagesResult<TData>
+  extends Omit<UseInfiniteQueryResult<InfiniteData<Page<TData>>>, "data"> {
+  messages: MessageStructure<TData>[];
+  data: InfiniteData<Page<TData>> | undefined;
 }
 
-export function useMultiAgentChannelMessages(
+export function useMultiAgentChannelMessages<TData = unknown>(
   channelName: string,
   agentIds: string[],
   options?: UseMultiAgentChannelMessagesOptions,
-): UseMultiAgentChannelMessagesResult {
+): UseMultiAgentChannelMessagesResult<TData> {
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const limit = options?.limit;
@@ -61,14 +61,15 @@ export function useMultiAgentChannelMessages(
 
   const prependMessage = useCallback(
     (message: MessageStructure) => {
-      queryClient.setQueryData<InfiniteData<Page>>(key, (current) => {
+      queryClient.setQueryData<InfiniteData<Page<TData>>>(key, (current) => {
         if (!current) return current;
+        const typed = message as MessageStructure<TData>;
         const [firstPage, ...rest] = current.pages;
         const firstResults = firstPage?.results ?? [];
         return {
           ...current,
           pages: [
-            { ...firstPage, results: [message, ...firstResults] },
+            { ...firstPage, results: [typed, ...firstResults] },
             ...rest,
           ],
         };
@@ -107,7 +108,7 @@ export function useMultiAgentChannelMessages(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
 
-  const query = useInfiniteQuery<Page>({
+  const query = useInfiniteQuery<Page<TData>>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
@@ -120,7 +121,7 @@ export function useMultiAgentChannelMessages(
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
       });
-      return page;
+      return page as unknown as Page<TData>;
     },
   });
 
