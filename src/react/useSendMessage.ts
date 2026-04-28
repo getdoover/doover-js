@@ -9,11 +9,14 @@ import { useDooverClient } from "./context";
  * to the channel and resolves with the created `MessageStructure` (including
  * its server-assigned `id` and `timestamp`).
  */
-export function useSendMessage(
+export function useSendMessage<TData extends object = object>(
   identifier: ChannelIdentifier,
-): UseMutationResult<MessageStructure, Error, object> {
+): UseMutationResult<MessageStructure<TData>, Error, TData> {
   const client = useDooverClient();
   return useMutation({
-    mutationFn: (data: object) => client.viewer.sendMessage(identifier, data),
+    mutationFn: (data: TData) =>
+      client.viewer.sendMessage(identifier, data) as Promise<
+        MessageStructure<TData>
+      >,
   });
 }

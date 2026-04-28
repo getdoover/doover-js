@@ -19,9 +19,9 @@ export interface UpdateMessageCallOptions {
 
 export interface UseUpdateMessageOptions extends UpdateMessageCallOptions {}
 
-export interface UpdateMessageVariables {
+export interface UpdateMessageVariables<TBody extends MessageBody = MessageBody> {
   messageId: string;
-  body: MessageBody;
+  body: TBody;
   /**
    * Per-call overrides. Extensible — add new knobs here without breaking
    * the variables shape.
@@ -35,16 +35,20 @@ export interface UpdateMessageVariables {
  * invocation can override `replace` / `params` via `variables.options` for
  * mutation sites that sometimes PUT and sometimes PATCH the same channel.
  */
-export function useUpdateMessage(
+export function useUpdateMessage<TBody extends MessageBody = MessageBody>(
   identifier: ChannelIdentifier,
   options?: UseUpdateMessageOptions,
-): UseMutationResult<unknown, Error, UpdateMessageVariables> {
+): UseMutationResult<unknown, Error, UpdateMessageVariables<TBody>> {
   const client = useDooverClient();
   const defaultReplace = options?.replace ?? false;
   const defaultParams = options?.params;
 
   return useMutation({
-    mutationFn: ({ messageId, body, options: call }: UpdateMessageVariables) => {
+    mutationFn: ({
+      messageId,
+      body,
+      options: call,
+    }: UpdateMessageVariables<TBody>) => {
       if (!identifier.agentId || !identifier.channelName) {
         throw new Error(
           "useUpdateMessage requires both agentId and channelName on the identifier.",

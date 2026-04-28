@@ -5,8 +5,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Aggregate } from "../types/common";
-import type { AgentAggregate } from "../types/openapi";
+import type { Aggregate, JSONValue, AgentAggregate } from "../types/common";
 import { useDooverClient } from "./context";
 import { channelAggregateQueryKey } from "./useChannelAggregate";
 
@@ -28,10 +27,10 @@ export interface UseMultiAgentAggregatesOptions {
   liveUpdates?: boolean;
 }
 
-export interface UseMultiAgentAggregatesResult {
+export interface UseMultiAgentAggregatesResult<TData> {
   /** Keyed by `agent_id` for O(1) lookup. */
-  aggregatesByAgent: Record<string, Aggregate>;
-  query: UseQueryResult<{ results: AgentAggregate[]; count: number }>;
+  aggregatesByAgent: Record<string, Aggregate<TData>>;
+  query: UseQueryResult<{ results: AgentAggregate<TData>[]; count: number }>;
 }
 
 /**
@@ -39,17 +38,19 @@ export interface UseMultiAgentAggregatesResult {
  * agent's slot live via its own gateway subscription. Reconciles per-agent
  * `channelSync`/`aggregateUpdate` events into the batched query cache.
  */
-export function useMultiAgentAggregates(
+export function useMultiAgentAggregates<
+  TData = Record<string, JSONValue>,
+>(
   channelName: string,
   agentIds: string[],
   options?: UseMultiAgentAggregatesOptions,
-): UseMultiAgentAggregatesResult {
+): UseMultiAgentAggregatesResult<TData> {
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const liveUpdates = options?.liveUpdates ?? true;
   const key = multiAgentAggregatesQueryKey(channelName, agentIds);
 
-  const query = useQuery({
+  const query = useQuery<{ results: AgentAggregate<TData>[]; count: number }>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
@@ -66,31 +67,34 @@ export function useMultiAgentAggregates(
         const { agent_id, ...aggregate } = result;
         queryClient.setQueryData(
           channelAggregateQueryKey(agent_id, channelName),
-          aggregate as Aggregate,
+          aggregate as Aggregate<TData>,
         );
       }
-      return response;
+      return response as unknown as {
+        results: AgentAggregate<TData>[];
+        count: number;
+      };
     },
   });
 
   const patchAgentAggregate = useCallback(
-    (agentId: string, aggregate: Aggregate) => {
-      queryClient.setQueryData<{ results: AgentAggregate[]; count: number }>(
-        key,
-        (current) => {
-          if (!current) return current;
-          const idx = current.results.findIndex((r) => r.agent_id === agentId);
-          const next: AgentAggregate = {
-            agent_id: agentId,
-            ...(aggregate as Aggregate),
-          };
-          const results =
-            idx === -1
-              ? [...current.results, next]
-              : current.results.map((r, i) => (i === idx ? next : r));
-          return { ...current, results };
-        },
-      );
+    (agentId: string, aggregate: Aggregate<TData>) => {
+      queryClient.setQueryData<{
+        results: AgentAggregate<TData>[];
+        count: number;
+      }>(key, (current) => {
+        if (!current) return current;
+        const idx = current.results.findIndex((r) => r.agent_id === agentId);
+        const next: AgentAggregate<TData> = {
+          agent_id: agentId,
+          ...aggregate,
+        };
+        const results =
+          idx === -1
+            ? [...current.results, next]
+            : current.results.map((r, i) => (i === idx ? next : r));
+        return { ...current, results };
+      });
       // Mirror live updates into the per-agent cache so sibling
       // `useChannelAggregate` consumers see them too.
       queryClient.setQueryData(
@@ -112,7 +116,7 @@ export function useMultiAgentAggregates(
         _id: { agentId?: string },
         aggregate: Aggregate,
       ) => {
-        patchAgentAggregate(agentId, aggregate);
+        patchAgentAggregate(agentId, aggregate as Aggregate<TData>);
       };
       void client.viewer.subscribeToChannel(
         identifier,
@@ -133,11 +137,11 @@ export function useMultiAgentAggregates(
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
 
   const aggregatesByAgent = useMemo(() => {
-    const map: Record<string, Aggregate> = {};
+    const map: Record<string, Aggregate<TData>> = {};
     for (const entry of query.data?.results ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { agent_id, ...aggregate } = entry;
-      map[agent_id] = aggregate as Aggregate;
+      map[agent_id] = aggregate as Aggregate<TData>;
     }
     return map;
   }, [query.data]);

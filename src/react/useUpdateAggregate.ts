@@ -23,20 +23,22 @@ export interface UseUpdateAggregateOptions {
  * aggregate into the react-query cache for its channel so consumers of
  * `useChannelAggregate` see the change immediately.
  */
-export function useUpdateAggregate(
+export function useUpdateAggregate<TData extends object = object>(
   identifier: ChannelIdentifier,
   options?: UseUpdateAggregateOptions,
-): UseMutationResult<Aggregate, Error, object> {
+): UseMutationResult<Aggregate<TData>, Error, TData> {
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const replace = options?.replace ?? false;
   const params = options?.params;
 
   return useMutation({
-    mutationFn: (data: object) =>
-      replace
+    mutationFn: (data: TData) =>
+      (replace
         ? client.viewer.putAggregate(identifier, data, params)
-        : client.viewer.updateAggregate(identifier, data, params),
+        : client.viewer.updateAggregate(identifier, data, params)) as Promise<
+        Aggregate<TData>
+      >,
     onSuccess: (aggregate) => {
       queryClient.setQueryData(
         channelAggregateQueryKey(identifier.agentId, identifier.channelName),
