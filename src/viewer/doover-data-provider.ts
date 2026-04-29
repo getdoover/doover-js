@@ -22,6 +22,7 @@ import type {
   AgentsResponse,
   ChannelIdentifier,
   ChannelsDataProvider,
+  GetAgentsOptions,
   SubscriptionDetails,
   User,
 } from "../types/viewer";
@@ -39,6 +40,16 @@ function isRpcMessageData<
     "status" in data &&
     "method" in data &&
     "request" in data
+  );
+}
+
+function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
   );
 }
 
@@ -116,12 +127,61 @@ export class DooverDataProvider
     return this.rest.get<User>("/users/me", undefined, this.config.controlApiUrl);
   }
 
-  getAgents(): Promise<AgentsResponse> {
-    return this.rest.request<AgentsResponse>({
+  async getAgents(options?: GetAgentsOptions): Promise<AgentsResponse> {
+    const query: Record<string, boolean> = {};
+    if (options?.includeArchived) {
+      query["include-archived"] = true;
+    }
+    if (options?.includeOrganisations) {
+      query["include-organisations"] = true;
+    }
+    if (options?.includeUsers) {
+      query["include-users"] = true;
+    }
+
+    const raw = await this.rest.request<AgentsResponse>({
       path: "/agents",
       baseUrl: this.config.controlApiUrl,
       omitSharingHeader: true,
+      query: Object.keys(query).length > 0 ? query : undefined,
     });
+
+    const rawAgents = Array.isArray(raw.agents) ? raw.agents : [];
+    const normalizedAgents = rawAgents.map((agent) =>
+      this.normalizeAgentEntry(agent),
+    );
+
+    if (!options?.mergeIncludedAsAgents) {
+      return {
+        ...raw,
+        agents: normalizedAgents,
+      };
+    }
+
+    const merged: Agent[] = [...normalizedAgents];
+
+    if (options.includeOrganisations) {
+      const rawOrganisations = Array.isArray(raw.organisations)
+        ? (raw.organisations as unknown[])
+        : [];
+      for (const org of rawOrganisations) {
+        merged.push(this.normalizeOrganisationEntry(org));
+      }
+    }
+
+    if (options.includeUsers) {
+      const rawUsers = Array.isArray(raw.users) ? (raw.users as unknown[]) : [];
+      for (const user of rawUsers) {
+        merged.push(this.normalizeUserEntry(user));
+      }
+    }
+
+    return {
+      ...raw,
+      agents: merged,
+      results: merged,
+      count: merged.length,
+    };
   }
 
   async getChannels(
@@ -409,6 +469,122 @@ export class DooverDataProvider
       fixed_location: { latitude: 0, longitude: 0 },
       extra_config: {},
     });
+  }
+
+  private normalizeAgentEntry(rawAgent: unknown): Agent {
+    const source: Record<string, unknown> = isPlainObject(rawAgent)
+      ? rawAgent
+      : {};
+    const fixedLocation = source.fixed_location;
+    const normalizedFixedLocation =
+      isPlainObject(fixedLocation) &&
+      typeof fixedLocation.latitude === "number" &&
+      typeof fixedLocation.longitude === "number"
+        ? {
+            latitude: fixedLocation.latitude,
+            longitude: fixedLocation.longitude,
+          }
+        : { latitude: 0, longitude: 0 };
+
+    const faIcon =
+      typeof source.fa_icon === "string" && source.fa_icon.length > 0
+        ? source.fa_icon
+        : "fa-solid fa-robot";
+
+    return {
+      ...(source as Record<string, unknown>),
+      id: typeof source.id === "string" ? source.id : String(source.id ?? ""),
+      organisation:
+        typeof source.organisation === "string" ? source.organisation : "",
+      name: typeof source.name === "string" ? source.name : "",
+      display_name:
+        typeof source.display_name === "string" ? source.display_name : "",
+      archived: typeof source.archived === "boolean" ? source.archived : false,
+      group: typeof source.group === "string" ? source.group : "",
+      fa_icon: faIcon,
+      type:
+        source.type === "device" ||
+        source.type === "dashboard" ||
+        source.type === "organisation" ||
+        source.type === "user"
+          ? source.type
+          : "device",
+      fixed_location: normalizedFixedLocation,
+      extra_config: this.coerceExtraConfig(source.extra_config),
+    } as Agent;
+  }
+
+  private normalizeOrganisationEntry(rawOrganisation: unknown): Agent {
+    const source: Record<string, unknown> = isPlainObject(rawOrganisation)
+      ? rawOrganisation
+      : {};
+    const name = typeof source.name === "string" ? source.name : "";
+    const rootGroup = isPlainObject(source.root_group) ? source.root_group : null;
+    const groupName =
+      rootGroup && typeof rootGroup.name === "string" ? rootGroup.name : "";
+
+    return {
+      id: typeof source.id === "string" ? source.id : String(source.id ?? ""),
+      organisation: name,
+      name,
+      display_name: name,
+      archived: typeof source.archived === "boolean" ? source.archived : false,
+      group: groupName,
+      fa_icon: "fa-solid fa-building",
+      type: "organisation",
+      fixed_location: { latitude: 0, longitude: 0 },
+      extra_config: this.coerceExtraConfig(source.extra_config),
+    };
+  }
+
+  private normalizeUserEntry(rawUser: unknown): Agent {
+    const source: Record<string, unknown> = isPlainObject(rawUser)
+      ? rawUser
+      : {};
+    const id = typeof source.id === "string" ? source.id : String(source.id ?? "");
+    const username = typeof source.username === "string" ? source.username : "";
+    const email = typeof source.email === "string" ? source.email : "";
+
+    const name = username !== "" ? username : email !== "" ? email : id;
+
+    return {
+      id,
+      organisation: "",
+      name,
+      display_name: this.buildUserDisplayName(source),
+      archived: false,
+      group: "",
+      fa_icon: "fa-solid fa-user",
+      type: "user",
+      fixed_location: { latitude: 0, longitude: 0 },
+      extra_config: this.coerceExtraConfig(source.custom_data),
+    };
+  }
+
+  private buildUserDisplayName(rawUser: unknown): string {
+    const source: Record<string, unknown> = isPlainObject(rawUser)
+      ? rawUser
+      : {};
+    const firstName = typeof source.first_name === "string" ? source.first_name.trim() : "";
+    const lastName = typeof source.last_name === "string" ? source.last_name.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (fullName !== "") {
+      return fullName;
+    }
+    if (typeof source.username === "string" && source.username !== "") {
+      return source.username;
+    }
+    if (typeof source.email === "string" && source.email !== "") {
+      return source.email;
+    }
+    if (typeof source.id === "string" && source.id !== "") {
+      return source.id;
+    }
+    return String(source.id ?? "");
+  }
+
+  private coerceExtraConfig(value: unknown): Record<string, unknown> {
+    return isPlainObject(value) ? (value as Record<string, unknown>) : {};
   }
 
   private requireChannel(identifier: ChannelIdentifier) {

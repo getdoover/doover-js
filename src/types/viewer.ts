@@ -19,7 +19,7 @@ export interface Agent {
   archived: boolean;
   group: string;
   fa_icon: string;
-  type: "device" | "dashboard";
+  type: "device" | "dashboard" | "organisation" | "user";
   fixed_location: {
     latitude: number;
     longitude: number;
@@ -33,6 +33,19 @@ export interface User {
   email?: string;
   name?: string;
   [key: string]: unknown;
+}
+
+export interface GetAgentsOptions {
+  includeArchived?: boolean;
+  includeOrganisations?: boolean;
+  includeUsers?: boolean;
+  /**
+   * When `true`, normalized organisations and users are appended into the
+   * canonical `agents` list (and mirrored to `results` / `count`). Defaults
+   * to `false`, which preserves the legacy behaviour of returning only the
+   * raw `agents` array.
+   */
+  mergeIncludedAsAgents?: boolean;
 }
 
 export interface AgentsResponse {
@@ -55,7 +68,7 @@ export interface ChannelsDataProvider<
   TIdentifier extends ChannelIdentifier = ChannelIdentifier,
 > {
   getMe: () => Promise<User>;
-  getAgents: () => Promise<AgentsResponse>;
+  getAgents: (options?: GetAgentsOptions) => Promise<AgentsResponse>;
   getChannels: (
     identifier: TIdentifier,
     options?: { includeArchived?: boolean },
