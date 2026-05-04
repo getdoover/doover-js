@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   useInfiniteQuery,
   useQueryClient,
@@ -35,6 +35,20 @@ export interface UseChannelMessagesOptions {
    * snowflake so server-stamped messages don't get missed).
    */
   initialBefore?: string;
+  /**
+   * Optional lower-bound snowflake id. The server only returns messages
+   * newer than this on every page, so paginating older eventually returns
+   * an empty page and `hasNextPage` flips to false — useful for fetching
+   * a bounded time window (e.g. last 24h) without a manual cutoff loop on
+   * the consumer side.
+   */
+  after?: string;
+  /**
+   * Keep paging older automatically until `hasNextPage` is false. Almost
+   * always combined with `after` (or a small channel) — without a lower
+   * bound this will walk the channel back to its first message.
+   */
+  autoPaginate?: boolean;
 }
 
 type Page<TData> = MessageStructure<TData>[];
@@ -63,6 +77,8 @@ export function useChannelMessages<TData = unknown>(
   const liveUpdates = options?.liveUpdates ?? true;
   const fields = options?.fields;
   const initialBefore = options?.initialBefore;
+  const after = options?.after;
+  const autoPaginate = options?.autoPaginate ?? false;
   const key = channelMessagesQueryKey(agentId, channelName);
 
   const onMessage = useCallback(
@@ -96,10 +112,17 @@ export function useChannelMessages<TData = unknown>(
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+        ...(after !== undefined ? { after } : {}),
       });
       return (page ?? []) as Page<TData>;
     },
   });
+
+  useEffect(() => {
+    if (!autoPaginate) return;
+    if (query.isFetching || !query.hasNextPage) return;
+    query.fetchNextPage();
+  }, [autoPaginate, query.isFetching, query.hasNextPage, query.fetchNextPage]);
 
   const messages = useMemo(
     () => (query.data?.pages ?? []).flat(),
