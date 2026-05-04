@@ -39,7 +39,7 @@ describe("DooverDataProvider", () => {
     await expect(provider.getMe()).to.eventually.deep.equal({ id: "u1" });
     await expect(provider.getAgents()).to.eventually.deep.equal({ agents: [] });
     expect(fetchMock.getCall(0).args[0]).to.equal("https://control.example.com/users/me");
-    expect(fetchMock.getCall(1).args[0]).to.equal("https://control.example.com/agents");
+    expect(fetchMock.getCall(1).args[0]).to.equal("https://control.example.com/agents/");
     expect((fetchMock.getCall(0).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal("internal");
     expect((fetchMock.getCall(1).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal(null);
   });
@@ -63,7 +63,7 @@ describe("DooverDataProvider", () => {
     });
 
     const url = fetchMock.getCall(0).args[0] as string;
-    expect(url.startsWith("https://control.example.com/agents?")).to.equal(true);
+    expect(url.startsWith("https://control.example.com/agents/?")).to.equal(true);
     expect(url).to.include("include-archived=true");
     expect(url).to.include("include-organisations=true");
     expect(url).to.include("include-users=true");

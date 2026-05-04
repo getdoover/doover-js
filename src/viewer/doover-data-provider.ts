@@ -140,7 +140,7 @@ export class DooverDataProvider
     }
 
     const raw = await this.rest.request<AgentsResponse>({
-      path: "/agents",
+      path: "/agents/",
       baseUrl: this.config.controlApiUrl,
       omitSharingHeader: true,
       query: Object.keys(query).length > 0 ? query : undefined,
