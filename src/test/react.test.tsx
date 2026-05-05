@@ -16,6 +16,7 @@ import {
   useChannelMessage,
   useChannelMessages,
   useConnectionState,
+  useInvocationLogs,
   useDooverClient,
   useSendMessage,
   useSendRpc,
@@ -431,6 +432,68 @@ describe("react bindings", () => {
     await waitFor(() =>
       expect(result.current.data?.response?.status).to.equal("success"),
     );
+  });
+
+  it("useInvocationLogs fetches logs for the message", async () => {
+    const messageId = generateSnowflakeIdAtTime(
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse([
+        { level: "INFO", message: "hello", timestamp: 1 },
+        { level: "ERROR", message: "boom", timestamp: 2 },
+      ]),
+    );
+    const client = new DooverClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      disableBrowserLifecycleHooks: true,
+    });
+
+    const { result } = renderHook(
+      () =>
+        useInvocationLogs<{ level: string; message: string; timestamp: number }>(
+          { agentId: "a1", channelName: "dv-proc-inv-1" },
+          messageId,
+        ),
+      { wrapper: wrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).to.equal(true));
+    expect(result.current.data?.map((l) => l.level)).to.deep.equal([
+      "INFO",
+      "ERROR",
+    ]);
+    const requestUrl = fetchMock.firstCall?.args[0] as string;
+    expect(requestUrl).to.contain(
+      `/agents/a1/channels/dv-proc-inv-1/messages/${messageId}/logs`,
+    );
+  });
+
+  it("useInvocationLogs is disabled when messageId is undefined", () => {
+    const fetchMock = createFetchMock(() => createJsonResponse([]));
+    const client = new DooverClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      disableBrowserLifecycleHooks: true,
+    });
+
+    renderHook(
+      () =>
+        useInvocationLogs(
+          { agentId: "a1", channelName: "dv-proc-inv-1" },
+          undefined,
+        ),
+      { wrapper: wrapper(client) },
+    );
+
+    expect(fetchMock.callCount).to.equal(0);
   });
 
   it("getSharedQueryClient returns the same QueryClient across callers", () => {

@@ -103,6 +103,16 @@ export class MessagesApi {
     );
   }
 
+  getInvocationLogs<TLog = unknown>(
+    agentId: string,
+    channelName: string,
+    messageId: string,
+  ) {
+    return this.rest.get<TLog[]>(
+      `/agents/${agentId}/channels/${channelName}/messages/${messageId}/logs`,
+    );
+  }
+
   createMultipartPayload(
     jsonPayload: Record<string, unknown>,
     attachments: Array<Blob | File>,
