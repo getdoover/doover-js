@@ -51,6 +51,12 @@ export type {
   UseChannelMessageResult,
 } from "./useChannelMessage";
 
+export {
+  useInvocationLogs,
+  invocationLogsQueryKey,
+} from "./useInvocationLogs";
+export type { UseInvocationLogsOptions } from "./useInvocationLogs";
+
 export { useSendRpc } from "./useSendRpc";
 export type {
   RpcCommandId,
