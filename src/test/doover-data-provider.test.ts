@@ -39,9 +39,300 @@ describe("DooverDataProvider", () => {
     await expect(provider.getMe()).to.eventually.deep.equal({ id: "u1" });
     await expect(provider.getAgents()).to.eventually.deep.equal({ agents: [] });
     expect(fetchMock.getCall(0).args[0]).to.equal("https://control.example.com/users/me");
-    expect(fetchMock.getCall(1).args[0]).to.equal("https://control.example.com/agents");
+    expect(fetchMock.getCall(1).args[0]).to.equal("https://control.example.com/agents/");
     expect((fetchMock.getCall(0).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal("internal");
     expect((fetchMock.getCall(1).args[1]?.headers as Headers).get("X-Doover-Sharing")).to.equal(null);
+  });
+
+  it("getAgents forwards include-archived/include-organisations/include-users query keys", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({ agents: [], organisations: [], users: [] }),
+    );
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    await provider.getAgents({
+      includeArchived: true,
+      includeOrganisations: true,
+      includeUsers: true,
+    });
+
+    const url = fetchMock.getCall(0).args[0] as string;
+    expect(url.startsWith("https://control.example.com/agents/?")).to.equal(true);
+    expect(url).to.include("include-archived=true");
+    expect(url).to.include("include-organisations=true");
+    expect(url).to.include("include-users=true");
+  });
+
+  it("getAgents preserves raw organisations/users without merging by default", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        agents: [
+          {
+            id: "a1",
+            name: "agent-1",
+            display_name: "Agent 1",
+            type: "device",
+            organisation: "Org 1",
+            group: "g",
+            archived: false,
+            fa_icon: "fa-solid fa-robot",
+            fixed_location: { latitude: 1, longitude: 2 },
+            extra_config: {},
+          },
+        ],
+        organisations: [{ id: "o1", name: "Org 1" }],
+        users: [{ id: "u1", username: "alice" }],
+      }),
+    );
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const result = await provider.getAgents({
+      includeOrganisations: true,
+      includeUsers: true,
+    });
+
+    expect(result.agents).to.have.lengthOf(1);
+    expect(result.agents?.[0].id).to.equal("a1");
+    expect(result.organisations).to.deep.equal([{ id: "o1", name: "Org 1" }]);
+    expect(result.users).to.deep.equal([{ id: "u1", username: "alice" }]);
+    expect(result.results).to.equal(undefined);
+    expect(result.count).to.equal(undefined);
+  });
+
+  it("getAgents merges normalized organisations and users when mergeIncludedAsAgents is true", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        agents: [
+          {
+            id: "a1",
+            name: "agent-1",
+            display_name: "Agent 1",
+            type: "device",
+            organisation: "Org 1",
+            group: "g",
+            archived: false,
+            fa_icon: "fa-solid fa-robot",
+            fixed_location: { latitude: 1, longitude: 2 },
+            extra_config: { foo: "bar" },
+          },
+        ],
+        organisations: [
+          {
+            id: "o1",
+            name: "Org One",
+            archived: false,
+            root_group: { name: "root" },
+            extra_config: { level: "premium" },
+          },
+        ],
+        users: [
+          {
+            id: "u1",
+            username: "alice",
+            email: "alice@example.com",
+            first_name: "Alice",
+            last_name: "Anderson",
+            custom_data: { theme: "dark" },
+          },
+        ],
+      }),
+    );
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const result = await provider.getAgents({
+      includeOrganisations: true,
+      includeUsers: true,
+      mergeIncludedAsAgents: true,
+    });
+
+    expect(result.agents).to.have.lengthOf(3);
+    expect(result.results).to.equal(result.agents);
+    expect(result.count).to.equal(3);
+
+    const [agent, organisation, user] = result.agents!;
+    expect(agent.id).to.equal("a1");
+    expect(agent.type).to.equal("device");
+
+    expect(organisation).to.deep.equal({
+      id: "o1",
+      organisation: "Org One",
+      name: "Org One",
+      display_name: "Org One",
+      archived: false,
+      group: "root",
+      fa_icon: "fa-solid fa-building",
+      type: "organisation",
+      fixed_location: { latitude: 0, longitude: 0 },
+      extra_config: { level: "premium" },
+    });
+
+    expect(user).to.deep.equal({
+      id: "u1",
+      organisation: "",
+      name: "alice",
+      display_name: "Alice Anderson",
+      archived: false,
+      group: "",
+      fa_icon: "fa-solid fa-user",
+      type: "user",
+      fixed_location: { latitude: 0, longitude: 0 },
+      extra_config: { theme: "dark" },
+    });
+  });
+
+  it("getAgents merge respects includeOrganisations/includeUsers flags", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        agents: [
+          {
+            id: "a1",
+            name: "a1",
+            display_name: "a1",
+            type: "device",
+            organisation: "o",
+            group: "g",
+            archived: false,
+            fa_icon: "fa-solid fa-robot",
+            fixed_location: { latitude: 0, longitude: 0 },
+            extra_config: {},
+          },
+        ],
+        organisations: [{ id: "o1", name: "Org 1" }],
+        users: [{ id: "u1", username: "alice" }],
+      }),
+    );
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const result = await provider.getAgents({
+      includeOrganisations: false,
+      includeUsers: true,
+      mergeIncludedAsAgents: true,
+    });
+
+    expect(result.agents).to.have.lengthOf(2);
+    expect(result.agents?.map((entry) => entry.type)).to.deep.equal([
+      "device",
+      "user",
+    ]);
+    expect(result.count).to.equal(2);
+  });
+
+  it("getAgents user display_name falls back through full name, username, email, id", async () => {
+    let payload: object = {};
+    const fetchMock = createFetchMock(() => createJsonResponse(payload));
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    payload = {
+      agents: [],
+      users: [
+        {
+          id: "u-full",
+          username: "alice",
+          email: "alice@example.com",
+          first_name: "Alice",
+          last_name: "Anderson",
+        },
+        { id: "u-username", username: "bob", email: "bob@example.com" },
+        { id: "u-email", email: "carol@example.com" },
+        { id: "u-id-only" },
+      ],
+    };
+    const result = await provider.getAgents({
+      includeUsers: true,
+      mergeIncludedAsAgents: true,
+    });
+    const merged = result.agents ?? [];
+    expect(merged.map((entry) => entry.display_name)).to.deep.equal([
+      "Alice Anderson",
+      "bob",
+      "carol@example.com",
+      "u-id-only",
+    ]);
+    expect(merged.map((entry) => entry.name)).to.deep.equal([
+      "alice",
+      "bob",
+      "carol@example.com",
+      "u-id-only",
+    ]);
+  });
+
+  it("getAgents fills agent defaults when fa_icon, fixed_location, or extra_config are missing/null", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        agents: [
+          {
+            id: "a1",
+            name: "a1",
+            display_name: "a1",
+            type: "device",
+            organisation: "o",
+            group: "g",
+            archived: false,
+            fa_icon: null,
+            fixed_location: null,
+            extra_config: null,
+          },
+          {
+            id: "a2",
+            name: "a2",
+            display_name: "a2",
+            type: "device",
+            organisation: "o",
+            group: "g",
+            archived: false,
+            // fa_icon, fixed_location, extra_config all missing
+          },
+        ],
+      }),
+    );
+    const provider = new DooverDataProvider({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+      webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+    });
+
+    const result = await provider.getAgents();
+    const [withNulls, withMissing] = result.agents ?? [];
+
+    expect(withNulls.fa_icon).to.equal("fa-solid fa-robot");
+    expect(withNulls.fixed_location).to.deep.equal({ latitude: 0, longitude: 0 });
+    expect(withNulls.extra_config).to.deep.equal({});
+
+    expect(withMissing.fa_icon).to.equal("fa-solid fa-robot");
+    expect(withMissing.fixed_location).to.deep.equal({ latitude: 0, longitude: 0 });
+    expect(withMissing.extra_config).to.deep.equal({});
   });
 
   it("returns undefined for missing identifiers where expected", async () => {
