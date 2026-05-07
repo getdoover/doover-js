@@ -100,7 +100,7 @@ function rpcMessage<TReq = object, TRes = object, TPending = undefined>(
   status: RpcStatus<TPending>,
   request: TReq,
   response?: TRes,
-): MessageStructure<RpcMessageData<TReq, TRes, TPending>> {
+): MessageStructure {
   return {
     id,
     data: { method: "do", request, status, response: response as TRes },
@@ -108,7 +108,7 @@ function rpcMessage<TReq = object, TRes = object, TPending = undefined>(
     author_id: "auth",
     channel,
     timestamp: 1,
-  };
+  } as unknown as MessageStructure;
 }
 
 describe("RpcDispatcher", () => {
