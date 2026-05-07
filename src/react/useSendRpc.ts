@@ -222,8 +222,11 @@ export function useSendRpc<
             : {}),
       };
 
-      return client.viewer.sendRPC<TRequest, TResponse, TPending>(
-        identifier,
+      if (!identifier.agentId || !identifier.channelName) {
+        throw new Error("Identifier must include agentId and channelName");
+      }
+      return client.rpc.send<TRequest, TResponse, TPending>(
+        { agentId: identifier.agentId, channelName: identifier.channelName },
         rpcRequest,
         {
           onStatus: (status) => appendStatus(commandId, status),
