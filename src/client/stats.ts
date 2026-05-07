@@ -29,9 +29,23 @@ export interface GatewayStatsSnapshot {
   messagesReceived: number;
 }
 
+export interface RpcStatsSnapshot {
+  enabled: boolean;
+  totalRpcs: number;
+  pendingRpcs: number;
+  completedRpcs: number;
+  failedRpcs: number;
+  timedOutRpcs: number;
+  abortedRpcs: number;
+  averageLatencyMs: number | null;
+  lastLatencyMs: number | null;
+  peakPendingRpcs: number;
+}
+
 export interface DooverStatsSnapshot {
   rest: RestStatsSnapshot;
   gateway: GatewayStatsSnapshot;
+  rpc: RpcStatsSnapshot;
 }
 
 export class DooverStatsCollector {
@@ -46,6 +60,16 @@ export class DooverStatsCollector {
 
   private gSent = 0;
   private gReceived = 0;
+
+  private rpTotal = 0;
+  private rpPending = 0;
+  private rpCompleted = 0;
+  private rpFailed = 0;
+  private rpTimedOut = 0;
+  private rpAborted = 0;
+  private rpLatencySum = 0;
+  private rpLastLatency: number | null = null;
+  private rpPeakPending = 0;
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
@@ -64,6 +88,15 @@ export class DooverStatsCollector {
     this.rLastLatency = null;
     this.gSent = 0;
     this.gReceived = 0;
+    this.rpTotal = 0;
+    this.rpPending = 0;
+    this.rpCompleted = 0;
+    this.rpFailed = 0;
+    this.rpTimedOut = 0;
+    this.rpAborted = 0;
+    this.rpLatencySum = 0;
+    this.rpLastLatency = null;
+    this.rpPeakPending = 0;
   }
 
   /**
@@ -97,8 +130,43 @@ export class DooverStatsCollector {
     this.gReceived += 1;
   }
 
+  recordRpcStart(): number | null {
+    if (!this.enabled) return null;
+    this.rpTotal += 1;
+    this.rpPending += 1;
+    if (this.rpPending > this.rpPeakPending) this.rpPeakPending = this.rpPending;
+    return now();
+  }
+
+  recordRpcEnd(
+    startedAt: number | null,
+    outcome: "success" | "error" | "timeout" | "abort",
+  ): void {
+    if (!this.enabled || startedAt === null) return;
+    this.rpPending = Math.max(0, this.rpPending - 1);
+    switch (outcome) {
+      case "success":
+        this.rpCompleted += 1;
+        break;
+      case "error":
+        this.rpFailed += 1;
+        break;
+      case "timeout":
+        this.rpTimedOut += 1;
+        break;
+      case "abort":
+        this.rpAborted += 1;
+        break;
+    }
+    const latency = now() - startedAt;
+    this.rpLastLatency = latency;
+    this.rpLatencySum += latency;
+  }
+
   snapshot(): DooverStatsSnapshot {
     const settled = this.rCompleted + this.rFailed;
+    const rpcSettled =
+      this.rpCompleted + this.rpFailed + this.rpTimedOut + this.rpAborted;
     return {
       rest: {
         enabled: this.enabled,
@@ -113,6 +181,18 @@ export class DooverStatsCollector {
         enabled: this.enabled,
         messagesSent: this.gSent,
         messagesReceived: this.gReceived,
+      },
+      rpc: {
+        enabled: this.enabled,
+        totalRpcs: this.rpTotal,
+        pendingRpcs: this.rpPending,
+        completedRpcs: this.rpCompleted,
+        failedRpcs: this.rpFailed,
+        timedOutRpcs: this.rpTimedOut,
+        abortedRpcs: this.rpAborted,
+        averageLatencyMs: rpcSettled > 0 ? this.rpLatencySum / rpcSettled : null,
+        lastLatencyMs: this.rpLastLatency,
+        peakPendingRpcs: this.rpPeakPending,
       },
     };
   }
