@@ -127,3 +127,34 @@ Reconnections automatically use the latest (potentially refreshed) token.
 `DooverClient` builds one shared `DooverAuth` instance and injects it into `RestClient`, `DooverDataProvider`, and `GatewayClient`. Token refreshes propagate everywhere automatically.
 
 `DooverDataProvider` preserves the older viewer-oriented interface. `DooverClient` exposes the broader API surface through subclients.
+
+## Migrating to 0.6.0
+
+`DooverDataProvider` (`client.viewer`) is deprecated in 0.5.0 and removed in 0.6.0. The replacements are subclients on `DooverClient`:
+
+| Viewer method | Replacement |
+|---|---|
+| `client.viewer.getMe()` | `client.users.getMe()` |
+| `client.viewer.getAgents(opts)` | `client.agents.listAgents(opts)` |
+| `client.viewer.getChannels(id, opts)` | `client.channels.listChannels(id, opts)` |
+| `client.viewer.getChannel(id)` | `client.channels.getChannel(id)` |
+| `client.viewer.createChannel(id, name, opts)` | `client.channels.putChannel(id, name, body)` |
+| `client.viewer.archiveChannel(id)` | `client.channels.archiveChannel(id)` |
+| `client.viewer.unarchiveChannel(id)` | `client.channels.unarchiveChannel(id)` |
+| `client.viewer.subscribeToChannel(id, msg, agg, upd?)` | `client.gateway.subscribeToChannel(channel, { onMessage, onAggregate, onMessageUpdate })` — returns an unsubscribe fn |
+| `client.viewer.unsubscribeFromChannel(id, cb)` | call the unsubscribe fn returned by `subscribeToChannel` |
+| `client.viewer.getAggregate(id)` | `const ch = await client.channels.getChannel(id); ch.aggregate ?? client.aggregates.getAggregate(id)` |
+| `client.viewer.updateAggregate(id, data, params)` | `client.aggregates.patchAggregate(id, data, params)` |
+| `client.viewer.putAggregate(id, data, params)` | `client.aggregates.putAggregate(id, data, params)` |
+| `client.viewer.getMessages(id, opts)` | `client.messages.listMessages(id, { ...opts, order: "asc" })` (omit `order` for raw newest-first server order) |
+| `client.viewer.deleteMessage(id, msgId)` | `client.messages.deleteMessage(id, msgId)` |
+| `client.viewer.sendMessage(id, data)` | `client.messages.postMessage(id, { data })` |
+| `client.viewer.sendRPC(id, req, opts)` | `client.rpc.send(id, req, opts)` |
+| `client.viewer.getChannelSubscriptions(id)` | `client.connections.getChannelSubscriptions(id)` |
+| `client.viewer.getAgentConnections(id)` | `client.connections.getAgentConnections(id)` |
+| `client.viewer.getIdentifierFromPath(p, s)` | `getIdentifierFromPath(p, s)` (free function — already exported) |
+| `client.viewer.getAgentInfo(id)` | **dropped, no replacement** — was a synthesized stub with no network call |
+
+`*Api` resource methods accept either positional arguments or a `ChannelIdentifier` / `{ agentId }` object on every call form.
+
+`client.rpc.send` adds optional `signal: AbortSignal` and `timeoutMs: number` and rejects with `DooverRpcError` (with `.status` and `.request`) instead of the bare status string.
