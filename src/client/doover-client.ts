@@ -8,10 +8,12 @@ import { NotificationsApi } from "../apis/notifications-api";
 import { PermissionsApi } from "../apis/permissions-api";
 import { ProcessorsApi } from "../apis/processors-api";
 import { TurnApi } from "../apis/turn-api";
+import { UsersApi } from "../apis/users-api";
 import { buildAuth } from "../auth/build-auth";
 import type { DooverAuth } from "../auth/doover-auth";
 import { GatewayClient } from "../gateway/gateway-client";
 import { RestClient, type DooverClientConfig } from "../http/rest-client";
+import { RpcDispatcher } from "../rpc/rpc-dispatcher";
 import { DooverDataProvider } from "../viewer/doover-data-provider";
 import {
   DooverStatsCollector,
@@ -22,6 +24,7 @@ export class DooverClient {
   readonly auth: DooverAuth;
   readonly rest: RestClient;
   readonly viewer: DooverDataProvider;
+  readonly users: UsersApi;
   readonly channels: ChannelsApi;
   readonly messages: MessagesApi;
   readonly aggregates: AggregatesApi;
@@ -33,7 +36,7 @@ export class DooverClient {
   readonly turn: TurnApi;
   readonly agents: AgentsApi;
   readonly gateway: GatewayClient;
-  /** Opt-in instrumentation. Disabled by default — see {@link enableStats}. */
+  readonly rpc: RpcDispatcher;
   readonly stats: DooverStatsCollector;
 
   constructor(config: DooverClientConfig) {
@@ -51,7 +54,14 @@ export class DooverClient {
     });
 
     this.rest = new RestClient(config, this.auth);
-    this.viewer = new DooverDataProvider(config, this.auth);
+    this.gateway = new GatewayClient(config, this.auth);
+    this.viewer = new DooverDataProvider({
+      rest: this.rest,
+      gateway: this.gateway,
+      controlApiUrl: config.controlApiUrl,
+    });
+
+    this.users = new UsersApi(this.rest, config.controlApiUrl);
     this.channels = new ChannelsApi(this.rest);
     this.messages = new MessagesApi(this.rest);
     this.aggregates = new AggregatesApi(this.rest);
@@ -61,39 +71,17 @@ export class DooverClient {
     this.permissions = new PermissionsApi(this.rest);
     this.processors = new ProcessorsApi(this.rest);
     this.turn = new TurnApi(this.rest);
-    this.agents = new AgentsApi(this.rest);
-    // Reuse the viewer's gateway so `client.gateway` and
-    // `client.viewer.gateway` are the same instance → one WebSocket per
-    // client. Without this, `client.gateway.connect()` and
-    // `client.viewer.subscribeToChannel(...)` each opened their own socket.
-    this.gateway = this.viewer.gateway;
+    this.agents = new AgentsApi(this.rest, config.controlApiUrl);
 
-    // Stats collector, disabled by default. Attached to both REST clients
-    // (facade + viewer's internal) and the shared gateway so every recorded
-    // call flows through the same counters. Pay-to-play: record methods
-    // short-circuit when disabled.
+    this.rpc = new RpcDispatcher(this.gateway, this.messages);
+
     this.stats = new DooverStatsCollector();
     this.rest.setStats(this.stats);
-    this.viewer.rest.setStats(this.stats);
     this.gateway.setStats(this.stats);
+    this.rpc.setStats(this.stats);
   }
 
-  /** Start capturing request/message stats. Off by default. */
-  enableStats(): void {
-    this.stats.setEnabled(true);
-  }
-
-  /** Stop capturing stats. Existing counters are retained; call `stats.reset()` to clear. */
-  disableStats(): void {
-    this.stats.setEnabled(false);
-  }
-
-  /**
-   * Snapshot the current stats. Returns zeroed counters if stats were
-   * never enabled. Combine with {@link GatewayClient.getSubscriptionCount}
-   * and {@link GatewayClient.getSession} for a full debug view.
-   */
-  getStats(): DooverStatsSnapshot {
-    return this.stats.snapshot();
-  }
+  enableStats(): void { this.stats.setEnabled(true); }
+  disableStats(): void { this.stats.setEnabled(false); }
+  getStats(): DooverStatsSnapshot { return this.stats.snapshot(); }
 }

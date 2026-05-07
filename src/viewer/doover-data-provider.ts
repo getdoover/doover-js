@@ -84,17 +84,36 @@ export class DooverDataProvider
   readonly messagesApi: MessagesApi;
   readonly aggregatesApi: AggregatesApi;
   readonly connectionsApi: ConnectionsApi;
+  private readonly controlApiUrl?: string;
   private readonly subscriptions = new Map<string, SubscriptionEntry[]>();
 
-  constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
-    this.rest = new RestClient(config, auth);
-    this.gateway = new GatewayClient(config, auth);
-    this.agentsApi = new AgentsApi(this.rest);
+  // overload signatures
+  constructor(config: DooverClientConfig, auth?: DooverAuth);
+  constructor(injected: { rest: RestClient; gateway: GatewayClient; controlApiUrl?: string });
+  // implementation
+  constructor(
+    configOrInjected:
+      | DooverClientConfig
+      | { rest: RestClient; gateway: GatewayClient; controlApiUrl?: string },
+    auth?: DooverAuth,
+  ) {
+    if ("rest" in configOrInjected && "gateway" in configOrInjected) {
+      this.rest = configOrInjected.rest;
+      this.gateway = configOrInjected.gateway;
+      this.controlApiUrl = configOrInjected.controlApiUrl;
+    } else {
+      this.rest = new RestClient(configOrInjected, auth);
+      this.gateway = new GatewayClient(configOrInjected, auth);
+      this.controlApiUrl = configOrInjected.controlApiUrl;
+    }
+    this.agentsApi = new AgentsApi(this.rest, this.controlApiUrl);
     this.channelsApi = new ChannelsApi(this.rest);
     this.messagesApi = new MessagesApi(this.rest);
     this.aggregatesApi = new AggregatesApi(this.rest);
     this.connectionsApi = new ConnectionsApi(this.rest);
 
+    // Existing event listener wiring (keep for now; Task 19 will remove these
+    // when the viewer becomes a thin delegating wrapper).
     this.gateway.on("messageCreate", (message) => {
       const key = this.channelKey(message.channel.agent_id, message.channel.name);
       const identifier = this.toIdentifier(message.channel.agent_id, message.channel.name);
@@ -124,7 +143,7 @@ export class DooverDataProvider
   }
 
   getMe(): Promise<User> {
-    return this.rest.get<User>("/users/me", undefined, this.config.controlApiUrl);
+    return this.rest.get<User>("/users/me", undefined, this.controlApiUrl);
   }
 
   async getAgents(options?: GetAgentsOptions): Promise<AgentsResponse> {
@@ -141,7 +160,7 @@ export class DooverDataProvider
 
     const raw = await this.rest.request<AgentsResponse>({
       path: "/agents/",
-      baseUrl: this.config.controlApiUrl,
+      baseUrl: this.controlApiUrl,
       omitSharingHeader: true,
       query: Object.keys(query).length > 0 ? query : undefined,
     });
