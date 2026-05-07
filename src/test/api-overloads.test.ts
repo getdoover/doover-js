@@ -139,3 +139,33 @@ describe("MessagesApi overloads + defaults", () => {
     expect(wireParams.limit).to.equal(5);
   });
 });
+
+import { AggregatesApi } from "../apis/aggregates-api";
+
+describe("AggregatesApi overloads", () => {
+  it("getAggregate positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new AggregatesApi(restA);
+    const apiB = new AggregatesApi(restB);
+    await apiA.getAggregate("a1", "c1");
+    await apiB.getAggregate({ agentId: "a1", channelName: "c1" });
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+
+  it("patchAggregate identifier form passes through body and params", async () => {
+    const rest = makeRestStub();
+    const api = new AggregatesApi(rest);
+    await api.patchAggregate(
+      { agentId: "a1", channelName: "c1" },
+      { x: 1 },
+      { suppress_response: true },
+    );
+    expect(rest.calls).to.deep.equal([
+      {
+        method: "patch",
+        args: ["/agents/a1/channels/c1/aggregate", { x: 1 }, { suppress_response: true }],
+      },
+    ]);
+  });
+});
