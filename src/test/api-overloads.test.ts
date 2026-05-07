@@ -128,4 +128,14 @@ describe("MessagesApi overloads + defaults", () => {
     const result = await api.listMessages("a1", "c1", { limit: 2 });
     expect(result.map((m) => m.id)).to.deep.equal(["3", "2"]);
   });
+
+  it("getTimeseries strips order before sending to server", async () => {
+    const rest = makeRestStub();
+    const api = new MessagesApi(rest);
+    await api.getTimeseries("a1", "c1", { limit: 5, order: "asc" } as never);
+    expect(rest.calls).to.have.lengthOf(1);
+    const wireParams = rest.calls[0]!.args[1] as Record<string, unknown>;
+    expect(wireParams.order).to.equal(undefined);
+    expect(wireParams.limit).to.equal(5);
+  });
 });

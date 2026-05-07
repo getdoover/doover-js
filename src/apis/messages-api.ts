@@ -119,9 +119,10 @@ export class MessagesApi {
     return this._getTimeseries(agentId, channelName, options as ListMessagesParams);
   }
   private _getTimeseries(agentId: string, channelName: string, params: ListMessagesParams) {
+    const { order: _order, ...rest } = params;
     return this.rest.get<DataSeries>(
       `/agents/${agentId}/channels/${channelName}/messages/timeseries`,
-      params,
+      rest,
     );
   }
 
