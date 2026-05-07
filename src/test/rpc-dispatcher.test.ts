@@ -11,6 +11,7 @@ import type {
 } from "../types/common";
 import { RpcDispatcher } from "../rpc/rpc-dispatcher";
 import { DooverRpcError } from "../rpc/errors";
+import { DooverStatsCollector } from "../client/stats";
 
 interface FakeGateway {
   emitMessageUpdate(msg: MessageStructure, requestData?: JSONValue): void;
@@ -237,5 +238,34 @@ describe("RpcDispatcher additional outcomes", () => {
     expect(await pA).to.deep.equal({ a: true });
     expect(await pB).to.deep.equal({ b: true });
     expect(gw.unsubscribeCalls).to.equal(1);
+  });
+});
+
+describe("RpcDispatcher stats integration", () => {
+  it("records start and end via collector when enabled", async () => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    const stats = new DooverStatsCollector();
+    stats.setEnabled(true);
+    dispatcher.setStats(stats);
+    messages.setNextId("rpc-stats");
+    const channel: ChannelRef = { agent_id: "a1", name: "c1" };
+    const p = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    expect(stats.snapshot().rpc.pendingRpcs).to.equal(1);
+    gw.emitMessageUpdate(rpcMessage("rpc-stats", channel, { code: "success" }, {}, { ok: true }));
+    await p;
+    const snap = stats.snapshot();
+    expect(snap.rpc.totalRpcs).to.equal(1);
+    expect(snap.rpc.completedRpcs).to.equal(1);
+    expect(snap.rpc.pendingRpcs).to.equal(0);
+    expect(snap.rpc.peakPendingRpcs).to.equal(1);
   });
 });
