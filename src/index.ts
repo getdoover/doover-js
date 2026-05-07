@@ -21,6 +21,14 @@ export { NotificationsApi } from "./apis/notifications-api";
 export { PermissionsApi } from "./apis/permissions-api";
 export { ProcessorsApi } from "./apis/processors-api";
 export { TurnApi } from "./apis/turn-api";
+export { UsersApi } from "./apis/users-api";
+
+export { RpcDispatcher } from "./rpc/rpc-dispatcher";
+export type { SendRpcOptions } from "./rpc/rpc-dispatcher";
+export { DooverRpcError } from "./rpc/errors";
+
+export type { ChannelHandlers } from "./gateway/gateway-client";
+export type { RpcStatsSnapshot } from "./client/stats";
 
 export { DooverAuth } from "./auth/doover-auth";
 export { CookieAuth } from "./auth/cookie-auth";
