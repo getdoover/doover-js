@@ -108,30 +108,16 @@ export function useMultiAgentAggregates<
 
   useEffect(() => {
     if (!liveUpdates || agentIds.length === 0) return;
-    const noopMessage = () => {};
-    const subscriptions = agentIds.map((agentId) => {
-      const identifier = { agentId, channelName };
-      const messageCallback = noopMessage;
-      const aggregateCallback = (
-        _id: { agentId?: string },
-        aggregate: Aggregate,
-      ) => {
-        patchAgentAggregate(agentId, aggregate as Aggregate<TData>);
-      };
-      void client.viewer.subscribeToChannel(
-        identifier,
-        messageCallback,
-        aggregateCallback,
-      );
-      return { identifier, messageCallback };
+    const offs = agentIds.map((agentId) => {
+      const channel = { agent_id: agentId, name: channelName };
+      return client.gateway.subscribeToChannel(channel, {
+        onAggregate: (agg) =>
+          patchAgentAggregate(agentId, agg as Aggregate<TData>),
+      });
     });
-
+    void client.gateway.connect();
     return () => {
-      for (const { identifier, messageCallback } of subscriptions) {
-        client.viewer
-          .unsubscribeFromChannel(identifier, messageCallback)
-          .catch(() => {});
-      }
+      for (const off of offs) off();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
