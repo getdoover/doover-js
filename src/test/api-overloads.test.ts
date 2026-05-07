@@ -275,3 +275,49 @@ describe("ProcessorsApi overloads", () => {
     ]);
   });
 });
+
+import { AgentsApi } from "../apis/agents-api";
+
+describe("AgentsApi listAgents", () => {
+  it("calls /agents/ on controlApiUrl with omitSharingHeader", async () => {
+    const rest = makeRestStub();
+    const api = new AgentsApi(rest, "https://control.example.com");
+    await api.listAgents({ includeArchived: true });
+    expect(rest.calls).to.have.lengthOf(1);
+    expect(rest.calls[0]!.method).to.equal("request");
+    const req = rest.calls[0]!.args[0] as {
+      path: string;
+      baseUrl?: string;
+      omitSharingHeader: boolean;
+      query?: Record<string, boolean>;
+    };
+    expect(req.path).to.equal("/agents/");
+    expect(req.baseUrl).to.equal("https://control.example.com");
+    expect(req.omitSharingHeader).to.equal(true);
+    expect(req.query).to.deep.equal({ "include-archived": true });
+  });
+
+  it("normalises agent entries and merges organisations/users when requested", async () => {
+    const rest = makeRestStub();
+    rest.request = ((..._args: unknown[]) =>
+      Promise.resolve({
+        agents: [
+          { id: "a1", name: "Agent One", type: "device" },
+        ],
+        organisations: [{ id: "o1", name: "Org One" }],
+        users: [{ id: "u1", name: "User One" }],
+      })) as unknown as RestClient["request"];
+    const api = new AgentsApi(rest);
+    const result = await api.listAgents({
+      includeOrganisations: true,
+      includeUsers: true,
+      mergeIncludedAsAgents: true,
+    });
+    expect(result.results).to.have.lengthOf(3);
+    expect(result.count).to.equal(3);
+    const ids = (result.results ?? []).map((a) => a.id).sort();
+    expect(ids).to.deep.equal(["a1", "o1", "u1"]);
+    const types = (result.results ?? []).map((a) => a.type).sort();
+    expect(types).to.deep.equal(["device", "organisation", "user"]);
+  });
+});
