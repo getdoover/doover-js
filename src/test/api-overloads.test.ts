@@ -192,3 +192,26 @@ describe("AlarmsApi overloads", () => {
     ]);
   });
 });
+
+import { ConnectionsApi } from "../apis/connections-api";
+
+describe("ConnectionsApi overloads", () => {
+  it("getAgentConnections positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new ConnectionsApi(restA);
+    const apiB = new ConnectionsApi(restB);
+    await apiA.getAgentConnections("a1");
+    await apiB.getAgentConnections({ agentId: "a1" });
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+
+  it("getChannelSubscriptions identifier form hits expected path", async () => {
+    const rest = makeRestStub();
+    const api = new ConnectionsApi(rest);
+    await api.getChannelSubscriptions({ agentId: "a1", channelName: "c1" });
+    expect(rest.calls).to.deep.equal([
+      { method: "get", args: ["/agents/a1/channels/c1/subscriptions"] },
+    ]);
+  });
+});
