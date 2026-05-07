@@ -14,9 +14,14 @@ export function useSendMessage<TData extends object = object>(
 ): UseMutationResult<MessageStructure<TData>, Error, TData> {
   const client = useDooverClient();
   return useMutation({
-    mutationFn: (data: TData) =>
-      client.viewer.sendMessage(identifier, data) as Promise<
-        MessageStructure<TData>
-      >,
+    mutationFn: (data: TData) => {
+      if (!identifier.agentId || !identifier.channelName) {
+        return Promise.reject(new Error("Identifier must include agentId and channelName"));
+      }
+      return client.messages.postMessage(
+        { agentId: identifier.agentId, channelName: identifier.channelName },
+        { data: data as Record<string, unknown> },
+      ) as Promise<MessageStructure<TData>>;
+    },
   });
 }
