@@ -8,12 +8,24 @@ import type {
   GatewayListenerMap,
   WebSocketSession,
 } from "./types";
-import type { ChannelRef, JSONValue } from "../types/common";
+import type { Aggregate, ChannelRef, JSONValue, MessageStructure } from "../types/common";
 
 type ListenerSet<K extends keyof GatewayListenerMap> = Set<GatewayListenerMap[K]>;
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 30_000;
+
+export interface ChannelHandlers {
+  onMessage?: (msg: MessageStructure) => void;
+  onMessageUpdate?: (msg: MessageStructure, requestData?: JSONValue) => void;
+  onAggregate?: (agg: Aggregate) => void;
+}
+
+interface ChannelRegistryEntry {
+  handlers: Set<ChannelHandlers>;
+  /** Bound listeners we attached to `this.on(...)` so we can remove them. */
+  cleanup: Array<() => void>;
+}
 
 export class GatewayClient {
   private socket: WebSocket | null = null;
@@ -40,6 +52,7 @@ export class GatewayClient {
     close: new Set(),
   };
   private subscriptions = new Map<string, { channel: ChannelRef; diff_only: boolean }>();
+  private channelRegistry = new Map<string, ChannelRegistryEntry>();
   private readonly auth: DooverAuth | null;
   private stats: DooverStatsCollector | null = null;
 
@@ -160,6 +173,66 @@ export class GatewayClient {
         organisation_id: this.config.organisationId ?? null,
       },
     });
+  }
+
+  /**
+   * Attach channel-scoped handlers. Returns an idempotent unsubscribe fn.
+   * The first handler for a channel triggers a wire-level subscribe; the
+   * last detach triggers a wire-level unsubscribe.
+   */
+  subscribeToChannel(channel: ChannelRef, handlers: ChannelHandlers): () => void {
+    const key = this.channelKey(channel);
+    let entry = this.channelRegistry.get(key);
+    if (!entry) {
+      entry = { handlers: new Set(), cleanup: [] };
+      this.channelRegistry.set(key, entry);
+
+      const matches = (c: ChannelRef) =>
+        c.agent_id === channel.agent_id && c.name === channel.name;
+
+      const onMsgCreate = (msg: MessageStructure) => {
+        if (!matches(msg.channel)) return;
+        entry!.handlers.forEach((h) => h.onMessage?.(msg));
+      };
+      const onMsgUpdate = (msg: MessageStructure, requestData?: JSONValue) => {
+        if (!matches(msg.channel)) return;
+        entry!.handlers.forEach((h) => h.onMessageUpdate?.(msg, requestData));
+      };
+      const onAggregate = (event: { channel: ChannelRef; aggregate: Aggregate }) => {
+        if (!matches(event.channel)) return;
+        entry!.handlers.forEach((h) => h.onAggregate?.(event.aggregate));
+      };
+      const onChannelSync = (event: { channel: ChannelRef; aggregate: Aggregate }) => {
+        if (!matches(event.channel)) return;
+        entry!.handlers.forEach((h) => h.onAggregate?.(event.aggregate));
+      };
+
+      this.on("messageCreate", onMsgCreate);
+      this.on("messageUpdate", onMsgUpdate);
+      this.on("aggregateUpdate", onAggregate);
+      this.on("channelSync", onChannelSync);
+      entry.cleanup.push(
+        () => this.off("messageCreate", onMsgCreate),
+        () => this.off("messageUpdate", onMsgUpdate),
+        () => this.off("aggregateUpdate", onAggregate),
+        () => this.off("channelSync", onChannelSync),
+      );
+
+      this.subscribe(channel);
+    }
+
+    entry.handlers.add(handlers);
+    let detached = false;
+    return () => {
+      if (detached) return;
+      detached = true;
+      entry!.handlers.delete(handlers);
+      if (entry!.handlers.size === 0) {
+        entry!.cleanup.forEach((fn) => fn());
+        this.channelRegistry.delete(key);
+        this.unsubscribe(channel);
+      }
+    };
   }
 
   syncChannel(channel: ChannelRef) {
