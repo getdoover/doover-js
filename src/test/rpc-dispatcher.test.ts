@@ -137,3 +137,105 @@ describe("RpcDispatcher", () => {
     expect(gw.unsubscribeCalls).to.equal(1);
   });
 });
+
+describe("RpcDispatcher additional outcomes", () => {
+  it("rejects with DooverRpcError on terminal error status", async () => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    messages.setNextId("rpc-2");
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    const channel: ChannelRef = { agent_id: "a1", name: "c1" };
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    gw.emitMessageUpdate(
+      rpcMessage("rpc-2", channel, { code: "error", message: "nope" }, {}),
+    );
+    let caught: unknown;
+    try {
+      await promise;
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).to.be.instanceOf(DooverRpcError);
+    expect((caught as Error).message).to.equal("nope");
+  });
+
+  it("rejects on timeoutMs with no terminal status", async () => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { timeoutMs: 5 },
+    );
+    let caught: Error | undefined;
+    try {
+      await promise;
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught?.message).to.equal("RPC timed out");
+  });
+
+  it("rejects on AbortSignal.abort()", async () => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    const ac = new AbortController();
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { signal: ac.signal },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    ac.abort(new Error("user cancelled"));
+    let caught: Error | undefined;
+    try {
+      await promise;
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught?.message).to.equal("user cancelled");
+  });
+
+  it("two concurrent RPCs on the same channel share one gateway subscription", async () => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    messages.setNextId("rpc-A");
+    const pA = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: { n: 1 } },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    messages.setNextId("rpc-B");
+    const pB = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: { n: 2 } },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    expect(gw.subscribeCalls).to.equal(1);
+    const channel: ChannelRef = { agent_id: "a1", name: "c1" };
+    gw.emitMessageUpdate(rpcMessage("rpc-A", channel, { code: "success" }, { n: 1 }, { a: true }));
+    gw.emitMessageUpdate(rpcMessage("rpc-B", channel, { code: "success" }, { n: 2 }, { b: true }));
+    expect(await pA).to.deep.equal({ a: true });
+    expect(await pB).to.deep.equal({ b: true });
+    expect(gw.unsubscribeCalls).to.equal(1);
+  });
+});
