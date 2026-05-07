@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ChannelsApi } from "../apis/channels-api";
+import { MessagesApi } from "../apis/messages-api";
 import type { RestClient } from "../http/rest-client";
 
 interface RecordedCall {
@@ -13,7 +14,7 @@ export function makeRestStub(): RestClient & { calls: RecordedCall[] } {
     calls,
     get: (...args: unknown[]) => {
       calls.push({ method: "get", args });
-      return Promise.resolve(undefined as unknown);
+      return Promise.resolve([] as unknown);
     },
     post: (...args: unknown[]) => {
       calls.push({ method: "post", args });
@@ -76,5 +77,55 @@ describe("ChannelsApi overloads", () => {
     expect(rest.calls).to.deep.equal([
       { method: "post", args: ["/agents/a1/channels/c1/unarchive", {}] },
     ]);
+  });
+});
+
+describe("MessagesApi overloads + defaults", () => {
+  it("listMessages positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new MessagesApi(restA);
+    const apiB = new MessagesApi(restB);
+    await apiA.listMessages("a1", "c1", { limit: 5, order: "desc" });
+    await apiB.listMessages(
+      { agentId: "a1", channelName: "c1" },
+      { limit: 5, order: "desc" },
+    );
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+
+  it("listMessages defaults limit to 10 when omitted", async () => {
+    const rest = makeRestStub();
+    const api = new MessagesApi(rest);
+    await api.listMessages("a1", "c1");
+    expect(rest.calls).to.have.lengthOf(1);
+    const params = rest.calls[0]!.args[1] as { limit?: number; before?: string };
+    expect(params.limit).to.equal(10);
+    expect(params.before, "before should be set to a snowflake id").to.be.a("string");
+  });
+
+  it("listMessages with order='asc' reverses the response array", async () => {
+    const rest = makeRestStub();
+    rest.get = ((..._args: unknown[]) =>
+      Promise.resolve([
+        { id: "3", data: {}, attachments: [], author_id: "a", channel: { agent_id: "a1", name: "c1" } },
+        { id: "2", data: {}, attachments: [], author_id: "a", channel: { agent_id: "a1", name: "c1" } },
+        { id: "1", data: {}, attachments: [], author_id: "a", channel: { agent_id: "a1", name: "c1" } },
+      ])) as unknown as RestClient["get"];
+    const api = new MessagesApi(rest);
+    const result = await api.listMessages("a1", "c1", { order: "asc", limit: 3 });
+    expect(result.map((m) => m.id)).to.deep.equal(["1", "2", "3"]);
+  });
+
+  it("listMessages with order='desc' (default) preserves server order", async () => {
+    const rest = makeRestStub();
+    rest.get = ((..._args: unknown[]) =>
+      Promise.resolve([
+        { id: "3", data: {}, attachments: [], author_id: "a", channel: { agent_id: "a1", name: "c1" } },
+        { id: "2", data: {}, attachments: [], author_id: "a", channel: { agent_id: "a1", name: "c1" } },
+      ])) as unknown as RestClient["get"];
+    const api = new MessagesApi(rest);
+    const result = await api.listMessages("a1", "c1", { limit: 2 });
+    expect(result.map((m) => m.id)).to.deep.equal(["3", "2"]);
   });
 });
