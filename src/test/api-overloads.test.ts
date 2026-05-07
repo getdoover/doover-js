@@ -169,3 +169,26 @@ describe("AggregatesApi overloads", () => {
     ]);
   });
 });
+
+import { AlarmsApi } from "../apis/alarms-api";
+
+describe("AlarmsApi overloads", () => {
+  it("listAlarms positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new AlarmsApi(restA);
+    const apiB = new AlarmsApi(restB);
+    await apiA.listAlarms("a1", "c1");
+    await apiB.listAlarms({ agentId: "a1", channelName: "c1" });
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+
+  it("getAlarm via identifier hits expected path", async () => {
+    const rest = makeRestStub();
+    const api = new AlarmsApi(rest);
+    await api.getAlarm({ agentId: "a1", channelName: "c1" }, "alm1");
+    expect(rest.calls).to.deep.equal([
+      { method: "get", args: ["/agents/a1/channels/c1/alarms/alm1"] },
+    ]);
+  });
+});
