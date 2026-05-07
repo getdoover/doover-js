@@ -108,13 +108,18 @@ export function useChannelMessages<TData = unknown>(
     getNextPageParam: (lastPage) =>
       lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
     queryFn: async ({ pageParam }) => {
-      const page = await client.viewer.getMessages(identifier, {
-        ...(typeof pageParam === "string" ? { before: pageParam } : {}),
-        ...(limit !== undefined ? { limit } : {}),
-        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
-        ...(after !== undefined ? { after } : {}),
-      });
-      return (page ?? []) as Page<TData>;
+      if (!agentId || !channelName) return [] as Page<TData>;
+      const page = await client.messages.listMessages(
+        { agentId, channelName },
+        {
+          ...(typeof pageParam === "string" ? { before: pageParam } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+          ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+          ...(after !== undefined ? { after } : {}),
+          order: "asc",
+        },
+      );
+      return page as Page<TData>;
     },
   });
 
