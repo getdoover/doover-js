@@ -215,3 +215,33 @@ describe("ConnectionsApi overloads", () => {
     ]);
   });
 });
+
+import { NotificationsApi } from "../apis/notifications-api";
+
+describe("NotificationsApi overloads", () => {
+  it("getAgentNotifications positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new NotificationsApi(restA);
+    const apiB = new NotificationsApi(restB);
+    await apiA.getAgentNotifications("a1");
+    await apiB.getAgentNotifications({ agentId: "a1" });
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+
+  it("updateNotificationEndpoint identifier form preserves endpointId and body", async () => {
+    const rest = makeRestStub();
+    const api = new NotificationsApi(rest);
+    await api.updateNotificationEndpoint(
+      { agentId: "a1" },
+      "ep1",
+      { name: "x" } as never,
+    );
+    expect(rest.calls).to.deep.equal([
+      {
+        method: "patch",
+        args: ["/agents/a1/notifications/endpoints/ep1", { name: "x" }],
+      },
+    ]);
+  });
+});
