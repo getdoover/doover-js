@@ -282,6 +282,10 @@ describe("AgentsApi listAgents", () => {
   it("calls /agents/ on controlApiUrl with omitSharingHeader", async () => {
     const rest = makeRestStub();
     const api = new AgentsApi(rest, "https://control.example.com");
+    rest.request = ((...args: unknown[]) => {
+      rest.calls.push({ method: "request", args });
+      return Promise.resolve({ agents: [] });
+    }) as unknown as RestClient["request"];
     await api.listAgents({ includeArchived: true });
     expect(rest.calls).to.have.lengthOf(1);
     expect(rest.calls[0]!.method).to.equal("request");
