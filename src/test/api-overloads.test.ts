@@ -259,3 +259,19 @@ describe("PermissionsApi overloads", () => {
     expect(restA.calls).to.deep.equal(restB.calls);
   });
 });
+
+import { ProcessorsApi } from "../apis/processors-api";
+
+describe("ProcessorsApi overloads", () => {
+  it("createProcessorSchedule identifier form hits expected path", async () => {
+    const rest = makeRestStub();
+    const api = new ProcessorsApi(rest);
+    await api.createProcessorSchedule({ agentId: "a1" }, "sch1", { foo: "bar" } as never);
+    expect(rest.calls).to.deep.equal([
+      {
+        method: "put",
+        args: ["/agents/a1/processors/schedules/sch1", { foo: "bar" }],
+      },
+    ]);
+  });
+});
