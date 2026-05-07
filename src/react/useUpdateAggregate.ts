@@ -33,12 +33,17 @@ export function useUpdateAggregate<TData extends object = object>(
   const params = options?.params;
 
   return useMutation({
-    mutationFn: (data: TData) =>
-      (replace
-        ? client.viewer.putAggregate(identifier, data, params)
-        : client.viewer.updateAggregate(identifier, data, params)) as Promise<
+    mutationFn: (data: TData) => {
+      if (!identifier.agentId || !identifier.channelName) {
+        return Promise.reject(new Error("Identifier must include agentId and channelName"));
+      }
+      const id = { agentId: identifier.agentId, channelName: identifier.channelName };
+      return (replace
+        ? client.aggregates.putAggregate(id, data as Record<string, unknown>, params)
+        : client.aggregates.patchAggregate(id, data as Record<string, unknown>, params)) as Promise<
         Aggregate<TData>
-      >,
+      >;
+    },
     onSuccess: (aggregate) => {
       queryClient.setQueryData(
         channelAggregateQueryKey(identifier.agentId, identifier.channelName),
