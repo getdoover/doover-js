@@ -245,3 +245,17 @@ describe("NotificationsApi overloads", () => {
     ]);
   });
 });
+
+import { PermissionsApi } from "../apis/permissions-api";
+
+describe("PermissionsApi overloads", () => {
+  it("getAgentPermission positional and identifier-object produce identical requests", async () => {
+    const restA = makeRestStub();
+    const restB = makeRestStub();
+    const apiA = new PermissionsApi(restA);
+    const apiB = new PermissionsApi(restB);
+    await apiA.getAgentPermission("a1");
+    await apiB.getAgentPermission({ agentId: "a1" });
+    expect(restA.calls).to.deep.equal(restB.calls);
+  });
+});
