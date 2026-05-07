@@ -86,8 +86,12 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
     queryKey: key,
     enabled: fetchInitial && !!agentId && !!channelName,
     staleTime: Infinity,
-    queryFn: () =>
-      client.viewer.getAggregate(identifier) as Promise<Aggregate<TData> | undefined>,
+    queryFn: async () => {
+      if (!agentId || !channelName) return undefined;
+      const channel = await client.channels.getChannel({ agentId, channelName });
+      if (channel.aggregate) return channel.aggregate as Aggregate<TData>;
+      return (await client.aggregates.getAggregate({ agentId, channelName })) as Aggregate<TData>;
+    },
     // A 404 means the aggregate doesn't exist — retrying won't change that,
     // and the caller needs the error promptly to render an empty/"not
     // installed" state. Fall back to the react-query default (3 retries) for
