@@ -81,29 +81,15 @@ export function useMultiAgentChannelMessages<TData = unknown>(
 
   useEffect(() => {
     if (!liveUpdates || agentIds.length === 0) return;
-    const subscriptions = agentIds.map((agentId) => {
-      const identifier = { agentId, channelName };
-      const messageCallback = (
-        _id: { agentId?: string },
-        message: MessageStructure,
-      ) => {
-        prependMessage(message);
-      };
-      const aggregateCallback = () => {};
-      void client.viewer.subscribeToChannel(
-        identifier,
-        messageCallback,
-        aggregateCallback,
-      );
-      return { identifier, messageCallback };
+    const offs = agentIds.map((agentId) => {
+      const channel = { agent_id: agentId, name: channelName };
+      return client.gateway.subscribeToChannel(channel, {
+        onMessage: (msg) => prependMessage(msg),
+      });
     });
-
+    void client.gateway.connect();
     return () => {
-      for (const { identifier, messageCallback } of subscriptions) {
-        client.viewer
-          .unsubscribeFromChannel(identifier, messageCallback)
-          .catch(() => {});
-      }
+      for (const off of offs) off();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
