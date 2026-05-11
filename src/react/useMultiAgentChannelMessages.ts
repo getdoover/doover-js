@@ -12,13 +12,17 @@ import { useDooverClient } from "./context";
 export function multiAgentChannelMessagesQueryKey(
   channelName: string,
   agentIds: string[],
+  sources?: string[],
 ) {
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
   return [
     "doover",
     "channel",
     channelName,
     "messages",
     [...agentIds].sort().join(","),
+    "src",
+    sourceDim,
   ] as const;
 }
 
@@ -33,6 +37,13 @@ export interface UseMultiAgentChannelMessagesOptions {
   fields?: string[];
   /** Optional first-page `before` cursor (snowflake id). */
   initialBefore?: string;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 interface Page<TData> {
@@ -57,7 +68,8 @@ export function useMultiAgentChannelMessages<TData = unknown>(
   const liveUpdates = options?.liveUpdates ?? true;
   const fields = options?.fields;
   const initialBefore = options?.initialBefore;
-  const key = multiAgentChannelMessagesQueryKey(channelName, agentIds);
+  const sources = options?.sources;
+  const key = multiAgentChannelMessagesQueryKey(channelName, agentIds, sources);
 
   const prependMessage = useCallback(
     (message: MessageStructure) => {
@@ -76,7 +88,7 @@ export function useMultiAgentChannelMessages<TData = unknown>(
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, channelName, agentIds.join(",")],
+    [queryClient, channelName, agentIds.join(","), sources?.join(",")],
   );
 
   useEffect(() => {
@@ -101,12 +113,18 @@ export function useMultiAgentChannelMessages<TData = unknown>(
     initialPageParam: initialBefore as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.next,
     queryFn: async ({ pageParam }) => {
-      const page = await client.agents.getMultiAgentMessages(channelName, {
+      const params = {
         agent_id: agentIds,
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
-      });
+      };
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      const page = await (sourcesArg
+        ? (client.agents.getMultiAgentMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(channelName, params, sourcesArg)
+        : client.agents.getMultiAgentMessages(channelName, params));
       return page as unknown as Page<TData>;
     },
   });

@@ -1,3 +1,4 @@
+import type { SourceProvenance } from "./provenance";
 import type {
   Aggregate,
   Channel,
@@ -26,12 +27,14 @@ export interface Agent {
   };
   extra_config: Record<string, unknown>;
   connection_determination?: "Online" | "Offline";
+  __source?: SourceProvenance;
 }
 
 export interface User {
   id: string;
   email?: string;
   name?: string;
+  __source?: SourceProvenance;
   [key: string]: unknown;
 }
 

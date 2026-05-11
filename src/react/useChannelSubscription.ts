@@ -16,6 +16,12 @@ export interface ChannelSubscriptionHandlers {
     request_data?: JSONValue,
   ) => void;
   onAggregate?: (aggregate: Aggregate) => void;
+  /**
+   * Reserved for future use. The composite gateway already routes by
+   * `channel.agent_id`, so this option is a no-op in v1. Pass it for
+   * forward-compatibility; it has no effect on the subscription.
+   */
+  sources?: string[];
 }
 
 /**

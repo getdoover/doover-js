@@ -12,19 +12,30 @@ import { channelAggregateQueryKey } from "./useChannelAggregate";
 export function multiAgentAggregatesQueryKey(
   channelName: string,
   agentIds: string[],
+  sources?: string[],
 ) {
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
   return [
     "doover",
     "channel",
     channelName,
     "aggregates",
     [...agentIds].sort().join(","),
+    "src",
+    sourceDim,
   ] as const;
 }
 
 export interface UseMultiAgentAggregatesOptions {
   /** If false, skip per-agent live subscriptions. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 export interface UseMultiAgentAggregatesResult<TData> {
@@ -48,17 +59,20 @@ export function useMultiAgentAggregates<
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const liveUpdates = options?.liveUpdates ?? true;
-  const key = multiAgentAggregatesQueryKey(channelName, agentIds);
+  const sources = options?.sources;
+  const key = multiAgentAggregatesQueryKey(channelName, agentIds, sources);
 
   const query = useQuery<{ results: AgentAggregate<TData>[]; count: number }>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
     queryFn: async () => {
-      const response = await client.agents.getMultiAgentAggregates(
-        channelName,
-        { agent_id: agentIds },
-      );
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      const response = await (sourcesArg
+        ? (client.agents.getMultiAgentAggregates as unknown as (...a: unknown[]) => Promise<{ results: AgentAggregate<TData>[]; count: number }>)(channelName, { agent_id: agentIds }, sourcesArg)
+        : client.agents.getMultiAgentAggregates(channelName, { agent_id: agentIds }));
       // Seed the per-agent `channelAggregateQueryKey` cache so that
       // sibling `useChannelAggregate(id, channelName)` calls for any
       // of these agents get an instant cache hit rather than issuing
@@ -66,7 +80,7 @@ export function useMultiAgentAggregates<
       for (const result of response.results) {
         const { agent_id, ...aggregate } = result;
         queryClient.setQueryData(
-          channelAggregateQueryKey(agent_id, channelName),
+          channelAggregateQueryKey(agent_id, channelName, sources),
           aggregate as Aggregate<TData>,
         );
       }
@@ -98,12 +112,12 @@ export function useMultiAgentAggregates<
       // Mirror live updates into the per-agent cache so sibling
       // `useChannelAggregate` consumers see them too.
       queryClient.setQueryData(
-        channelAggregateQueryKey(agentId, channelName),
+        channelAggregateQueryKey(agentId, channelName, sources),
         aggregate,
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, channelName, agentIds.join(",")],
+    [queryClient, channelName, agentIds.join(","), sources?.join(",")],
   );
 
   useEffect(() => {

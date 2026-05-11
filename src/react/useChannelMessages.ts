@@ -14,8 +14,10 @@ import { useChannelSubscription } from "./useChannelSubscription";
 export function channelMessagesQueryKey(
   agentId: string | undefined,
   channelName: string | undefined,
+  sources?: string[],
 ) {
-  return ["doover", "agent", agentId, "channel", channelName, "messages"] as const;
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
+  return ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
 }
 
 export interface UseChannelMessagesOptions {
@@ -49,6 +51,13 @@ export interface UseChannelMessagesOptions {
    * bound this will walk the channel back to its first message.
    */
   autoPaginate?: boolean;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 type Page<TData> = MessageStructure<TData>[];
@@ -79,7 +88,8 @@ export function useChannelMessages<TData = unknown>(
   const initialBefore = options?.initialBefore;
   const after = options?.after;
   const autoPaginate = options?.autoPaginate ?? false;
-  const key = channelMessagesQueryKey(agentId, channelName);
+  const sources = options?.sources;
+  const key = channelMessagesQueryKey(agentId, channelName, sources);
 
   const onMessage = useCallback(
     (message: MessageStructure) => {
@@ -95,7 +105,7 @@ export function useChannelMessages<TData = unknown>(
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName],
+    [queryClient, agentId, channelName, sources?.join(",")],
   );
 
   useChannelSubscription(liveUpdates ? identifier : undefined, { onMessage });
@@ -109,16 +119,20 @@ export function useChannelMessages<TData = unknown>(
       lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
     queryFn: async ({ pageParam }) => {
       if (!agentId || !channelName) return [] as Page<TData>;
-      const page = await client.messages.listMessages(
-        { agentId, channelName },
-        {
-          ...(typeof pageParam === "string" ? { before: pageParam } : {}),
-          ...(limit !== undefined ? { limit } : {}),
-          ...(fields && fields.length > 0 ? { field_name: fields } : {}),
-          ...(after !== undefined ? { after } : {}),
-          order: "asc",
-        },
-      );
+      const id = { agentId, channelName };
+      const params = {
+        ...(typeof pageParam === "string" ? { before: pageParam } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+        ...(after !== undefined ? { after } : {}),
+        order: "asc" as const,
+      };
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      const page = sourcesArg
+        ? await (client.messages.listMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(id, params, sourcesArg)
+        : await client.messages.listMessages(id, params);
       return page as Page<TData>;
     },
   });
