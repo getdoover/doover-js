@@ -1,3 +1,5 @@
+import type { SourceProvenance } from "./provenance";
+
 export type JSONPrimitive = null | boolean | number | string;
 
 export type JSONValue =
@@ -21,6 +23,7 @@ export interface Aggregate<TData = Record<string, JSONValue>> {
   data: TData;
   attachments: Attachment[];
   last_updated?: number | null;
+  __source?: SourceProvenance;
 }
 
 export interface MessageAttachment extends Attachment {}
@@ -33,6 +36,7 @@ export interface MessageStructure<TData = JSONValue> {
   channel: ChannelRef;
   timestamp: number;
   record_log?: boolean;
+  __source?: SourceProvenance;
 }
 
 export interface Channel<TAgg = Record<string, JSONValue>> {
@@ -46,6 +50,7 @@ export interface Channel<TAgg = Record<string, JSONValue>> {
   message_schema?: Record<string, JSONValue> | null;
   daily_message_summaries?: unknown[];
   alarms?: Alarm[];
+  __source?: SourceProvenance;
 }
 
 export interface Alarm {
@@ -59,6 +64,7 @@ export interface Alarm {
   state: AlarmState;
   expiry_mins: number | null;
   entered_state_ts: number;
+  __source?: SourceProvenance;
 }
 
 export type AlarmOperator = "eq" | "ge" | "gt" | "le" | "lt";
@@ -68,6 +74,7 @@ export interface ConnectionSubscription {
   channel: ChannelRef;
   subscribed_at: number;
   connection_id: string;
+  __source?: SourceProvenance;
 }
 
 export interface ConnectionSubscriptionLog {
@@ -75,6 +82,7 @@ export interface ConnectionSubscriptionLog {
   subscribed_at?: number | null;
   unsubscribed_at?: number | null;
   connection_id: string;
+  __source?: SourceProvenance;
 }
 
 export interface ConnectionDetails {
@@ -86,6 +94,7 @@ export interface ConnectionDetails {
   latency?: number | null;
   status: number;
   subscriptions: ConnectionSubscription[];
+  __source?: SourceProvenance;
 }
 
 export interface NotificationSubscriptionEndpoint {
@@ -101,6 +110,7 @@ export interface NotificationSubscription {
   severity: number;
   topic_filter: string[];
   endpoints: NotificationSubscriptionEndpoint[];
+  __source?: SourceProvenance;
 }
 
 export interface NotificationEndpoint {
@@ -111,6 +121,7 @@ export interface NotificationEndpoint {
   extra_data: Record<string, JSONValue>;
   name: string;
   default: boolean;
+  __source?: SourceProvenance;
 }
 
 export interface ResourcePermission {
@@ -123,6 +134,7 @@ export interface AgentPermission {
   is_superuser: boolean;
   resources: ResourcePermission[];
   last_updated?: number | null;
+  __source?: SourceProvenance;
 }
 
 export interface TurnCredential {
@@ -131,6 +143,7 @@ export interface TurnCredential {
   ttl: number;
   expires_at: number;
   uris: string[];
+  __source?: SourceProvenance;
 }
 
 export interface AgentAggregate<TData = Record<string, JSONValue>> {
@@ -138,16 +151,19 @@ export interface AgentAggregate<TData = Record<string, JSONValue>> {
   data: TData;
   attachments: Attachment[];
   last_updated?: number | null;
+  __source?: SourceProvenance;
 }
 
 export interface DataSeriesResult {
   value: JSONValue;
   message_id: string;
+  __source?: SourceProvenance;
 }
 
 export interface DataSeries {
   count: number;
   results: DataSeriesResult[];
+  __source?: SourceProvenance;
 }
 
 /**
@@ -179,4 +195,5 @@ export interface RpcMessageData<
 > extends RpcRequest<TRequest> {
   status: RpcStatus<TPending>;
   response: TResponse;
+  __source?: SourceProvenance;
 }
