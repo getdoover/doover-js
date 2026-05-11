@@ -20,6 +20,11 @@ const INITIAL: ConnectionState = {
 };
 
 /**
+ * @deprecated Prefer `useClientStatus()` — it works for both `DooverClient` and
+ * `MultiplexClient`, and carries session, latency, last error and per-source
+ * state. `useConnectionState` is gateway-flavoured and single-source only;
+ * it will remain but new code should not use it.
+ *
  * Subscribes to the gateway's connection lifecycle and returns a snapshot
  * suitable for a connection-indicator UI.
  *
