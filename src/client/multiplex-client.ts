@@ -141,10 +141,6 @@ export class MultiplexClient implements DataClient {
     this.clientId = options.clientId ?? "multiplex";
 
     for (const d of options.register ?? []) this.registerSource(d);
-    const toEnable = options.enableAll
-      ? (options.register ?? []).map((d) => d.id)
-      : (options.enable ?? []);
-    for (const id of toEnable) this.enableSource(id);
 
     this.agents = this.makeAgentsFacade();
     this.channels = this.makeChannelsFacade();
@@ -159,6 +155,11 @@ export class MultiplexClient implements DataClient {
     this.users = this.makeReadFacade<UsersApiLike>("users");
     this.rpc = this.makeRpcFacade();
     this.gateway = this.makeCompositeGateway();
+
+    const toEnable = options.enableAll
+      ? (options.register ?? []).map((d) => d.id)
+      : (options.enable ?? []);
+    for (const id of toEnable) this.enableSource(id);
   }
 
   // ===== registry / activation =====
@@ -317,6 +318,11 @@ export class MultiplexClient implements DataClient {
     return members;
   }
 
+  /** Extract the agent id from the first positional arg (string or identifier object). */
+  private extractAgentId(args: unknown[]): string | undefined {
+    return typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+  }
+
   /** Throw if no enabled member supports `cap` at all (regardless of agent). */
   private assertSomeMemberSupports(cap: Capability): void {
     if (!this.enabledClients().some(({ client }) => client.supports(cap))) {
@@ -381,7 +387,7 @@ export class MultiplexClient implements DataClient {
     const self = this;
     return async function (...rawArgs: unknown[]) {
       const { args, sources } = self.splitSourcesOption(rawArgs);
-      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      const agentId = self.extractAgentId(args);
       let members = self.candidates(agentId, cap, sources);
       if (sources && sources.length === 1) {
         const only = members.find((m) => m.id === sources[0]);
@@ -404,7 +410,7 @@ export class MultiplexClient implements DataClient {
     return async function (...rawArgs: unknown[]) {
       const { args, sources } = self.splitSourcesOption(rawArgs);
       self.assertSomeMemberSupports(cap);
-      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      const agentId = self.extractAgentId(args);
       const members = self.candidates(agentId, cap, sources);
       if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
       const subclient = method.split(".")[0] as keyof DataClient;
@@ -425,7 +431,7 @@ export class MultiplexClient implements DataClient {
     return async function (...rawArgs: unknown[]) {
       const { args, sources } = self.splitSourcesOption(rawArgs);
       self.assertSomeMemberSupports(cap);
-      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      const agentId = self.extractAgentId(args);
       const members = self.candidates(agentId, cap, sources);
       if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
       const subclient = method.split(".")[0] as keyof DataClient;
@@ -447,7 +453,7 @@ export class MultiplexClient implements DataClient {
     return {
       async listChannels(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         self.assertSomeMemberSupports("channels.list");
         const members = self.candidates(agentId, "channels.list", sources);
         const perMember = await Promise.all(members.map((m) => (m.client.channels.listChannels as (...a: unknown[]) => Promise<unknown[]>)(...args)));
@@ -455,7 +461,7 @@ export class MultiplexClient implements DataClient {
       },
       async getChannel(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         const name = typeof args[0] === "string" ? (args[1] as string) : (args[0] as { channelName: string }).channelName;
         self.assertSomeMemberSupports("channels.get");
         const members = self.candidates(agentId, "channels.get", sources);
@@ -478,7 +484,7 @@ export class MultiplexClient implements DataClient {
     return {
       async getAggregate(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         const name = typeof args[0] === "string" ? (args[1] as string) : (args[0] as { channelName: string }).channelName;
         self.assertSomeMemberSupports("aggregates.get");
         const members = self.candidates(agentId, "aggregates.get", sources);
@@ -492,7 +498,7 @@ export class MultiplexClient implements DataClient {
       patchAggregate: self.routedWrite("aggregates.patchAggregate", "aggregates.patch") as never,
       async getAggregateAttachment(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         self.assertSomeMemberSupports("aggregates.attachment");
         const members = self.candidates(agentId, "aggregates.attachment", sources);
         for (const m of members) {
@@ -509,7 +515,7 @@ export class MultiplexClient implements DataClient {
     return {
       async listMessages(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         const params = (typeof args[0] === "string" ? args[2] : args[1]) as { order?: "asc" | "desc"; limit?: number; before?: string; after?: string } | undefined;
         const implied = self.requiredMessagesCapability(params);
         // a member is eligible if it has the implied cap; for "latest N" that IS messages.list.
@@ -520,7 +526,7 @@ export class MultiplexClient implements DataClient {
       },
       async getMessage(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
-        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const agentId = self.extractAgentId(args) as string;
         self.assertSomeMemberSupports("messages.get");
         const members = self.candidates(agentId, "messages.get", sources);
         for (const m of members) {
@@ -600,8 +606,7 @@ export class MultiplexClient implements DataClient {
         return async (...rawArgs: unknown[]) => {
           const { args, sources } = self.splitSourcesOption(rawArgs);
           self.assertSomeMemberSupports(spec.cap);
-          const agentId = !spec.agentScoped ? undefined
-            : (typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId);
+          const agentId = !spec.agentScoped ? undefined : self.extractAgentId(args);
           let members = self.candidates(agentId, spec.cap, sources);
           if (members.length === 0) throw new UnsupportedCapabilityError(spec.cap, self.clientId);
           let lastErr: unknown;
@@ -618,12 +623,11 @@ export class MultiplexClient implements DataClient {
 
   private makeRpcFacade(): RpcDispatcherLike {
     const self = this;
+    const sendFn = self.routedWrite("rpc.send", "rpc.send");
     return {
       setStats() { /* no-op for the multiplex; members keep their own stats */ },
       send(channel: { agentId: string; channelName: string }, request: unknown, options?: unknown) {
-        // route like a write keyed on channel.agentId
-        const router = self.routedWrite("rpc.send", "rpc.send");
-        return router(channel, request, options) as never;
+        return sendFn(channel, request, options) as never;
       },
     } as RpcDispatcherLike;
   }
@@ -709,7 +713,7 @@ export class MultiplexClient implements DataClient {
     else if (gwStatuses.some((s) => s.state === "connecting")) state = "connecting";
     else state = "disconnected";
     // most-recent member values for scalar summary fields (locked decision #8)
-    const newest = [...enabledMembers.map((m) => m.status)].sort((x, y) => y.at - x.at)[0];
+    const newest = enabledMembers.map((m) => m.status).sort((x, y) => y.at - x.at)[0];
     const gatewaySession = this.gateway.getSession();
     return {
       clientId: this.clientId,
@@ -732,8 +736,6 @@ export class MultiplexClient implements DataClient {
   }
 
   private emitStatus(): void {
-    // Guard: during construction `this.gateway` may not be assigned yet.
-    if (!this.gateway) return;
     const snap = this.getStatus();
     this.statusListeners.forEach((l) => l(snap));
   }

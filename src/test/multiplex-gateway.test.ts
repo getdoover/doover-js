@@ -9,13 +9,20 @@ function gwMember(id: string, scope: { mode: "all" } | { mode: "list"; agentIds:
   const subs: string[] = [];
   let connected = false;
   const channelHandlers = new Map<string, Set<{ onMessage?: (m: unknown) => void }>>();
+  const eventListeners = new Map<string, Set<(...a: unknown[]) => void>>();
   const member = {
     agents: {} as never, channels: {} as never, messages: {} as never, aggregates: {} as never,
     alarms: {} as never, connections: {} as never, notifications: {} as never, permissions: {} as never,
     processors: {} as never, turn: {} as never, users: {} as never, rpc: {} as never,
     gateway: {
       connect: async () => { connected = true; }, disconnect: () => { connected = false; }, reconnect: async () => {},
-      on: () => {}, off: () => {},
+      on: (event: string, handler: (...a: unknown[]) => void) => {
+        if (!eventListeners.has(event)) eventListeners.set(event, new Set());
+        eventListeners.get(event)!.add(handler);
+      },
+      off: (event: string, handler: (...a: unknown[]) => void) => {
+        eventListeners.get(event)?.delete(handler);
+      },
       subscribe: (c: { agent_id: string; name: string }) => subs.push(`${c.agent_id}/${c.name}`),
       unsubscribe: (c: { agent_id: string; name: string }) => { const i = subs.indexOf(`${c.agent_id}/${c.name}`); if (i >= 0) subs.splice(i, 1); },
       subscribeToChannel: (c: { agent_id: string; name: string }, h: { onMessage?: (m: unknown) => void }) => {
@@ -43,7 +50,12 @@ function gwMember(id: string, scope: { mode: "all" } | { mode: "list"; agentIds:
     onStatusChange: () => () => {},
     getAgentScope: async () => scope, getKnownAgentScope: () => scope,
   } as unknown as DataClient;
-  return { member, subs, deliver(k: string, m: unknown) { channelHandlers.get(k)?.forEach((h) => h.onMessage?.(m)); }, isConnected: () => connected };
+  return {
+    member, subs,
+    deliver(k: string, m: unknown) { channelHandlers.get(k)?.forEach((h) => h.onMessage?.(m)); },
+    emit(event: string, ...args: unknown[]) { eventListeners.get(event)?.forEach((h) => h(...args)); },
+    isConnected: () => connected,
+  };
 }
 
 describe("MultiplexGateway", () => {
@@ -67,5 +79,32 @@ describe("MultiplexGateway", () => {
     off();
     expect(c.subs).to.deep.equal([]);
     expect(l.subs).to.deep.equal([]);
+  });
+
+  it("on/off forwards gateway events from all members and off deregisters", async () => {
+    const c = gwMember("cloud", { mode: "all" });
+    const l = gwMember("local:7", { mode: "list", agentIds: ["dev7"] });
+    const factory = (d: SourceDescriptor) => d.id === "cloud" ? c.member : l.member;
+    const mux = new MultiplexClient({ factory, register: [{ id: "cloud", kind: "cloud" }, { id: "local:7", kind: "local" }], enableAll: true });
+
+    let callCount = 0;
+    // open fires with no arguments; use a () => void signature to match the typed overload.
+    const handler = () => { callCount++; };
+
+    mux.gateway.on("open", handler);
+
+    // Emit from member A — handler should fire once.
+    c.emit("open");
+    expect(callCount).to.equal(1);
+
+    // Emit from member B — handler should fire again.
+    l.emit("open");
+    expect(callCount).to.equal(2);
+
+    // After off(), neither member triggers the handler.
+    mux.gateway.off("open", handler);
+    c.emit("open");
+    l.emit("open");
+    expect(callCount).to.equal(2);
   });
 });

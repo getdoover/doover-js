@@ -26,17 +26,21 @@ type AnyGateway = GatewayClientLike & {
  *  - getSubscriptions/getSubscriptionCount → union across members.
  */
 export class MultiplexGateway implements GatewayClientLike {
-  /** consumer event handler → per-member bound handler, so off() can detach. */
+  /** consumer event handler → set of member gateways it was registered on. */
   private readonly eventBindings = new Map<
     string,
-    Map<(...a: unknown[]) => void, Array<{ gw: AnyGateway; bound: (...a: unknown[]) => void }>>
+    Map<(...a: unknown[]) => void, Set<AnyGateway>>
   >();
 
   constructor(private readonly host: MultiplexGatewayHost) {}
 
   setStats(): void { /* members keep their own stats collectors */ }
 
-  setProvenanceHook(): void { /* no-op: members stamp their own payloads */ }
+  setProvenanceHook(): void {
+    /* No-op: provenance hooks are set on each member's concrete gateway impl by their owning
+     * DataClient (DooverClient/LocalAgentClient). The composite MultiplexGateway is never the
+     * target of a hook call. */
+  }
 
   async connect(): Promise<void> {
     await Promise.all(this.host.gatewayMembers().map((m) => m.gateway.connect()));
@@ -54,20 +58,19 @@ export class MultiplexGateway implements GatewayClientLike {
     const perEvent =
       this.eventBindings.get(event) ??
       this.eventBindings.set(event, new Map()).get(event)!;
-    const bound: Array<{ gw: AnyGateway; bound: (...a: unknown[]) => void }> = [];
+    const gws = new Set<AnyGateway>();
     for (const m of this.host.gatewayMembers()) {
       const gw = m.gateway as AnyGateway;
-      const b = (...a: unknown[]) => handler(...a);
-      gw.on(event, b);
-      bound.push({ gw, bound: b });
+      gw.on(event, handler);
+      gws.add(gw);
     }
-    perEvent.set(handler, bound);
+    perEvent.set(handler, gws);
   }
 
   off(event: string, handler: (...a: unknown[]) => void): void {
-    const bound = this.eventBindings.get(event)?.get(handler);
-    if (!bound) return;
-    for (const { gw, bound: b } of bound) gw.off(event, b);
+    const gws = this.eventBindings.get(event)?.get(handler);
+    if (!gws) return;
+    for (const gw of gws) gw.off(event, handler);
     this.eventBindings.get(event)!.delete(handler);
   }
 
