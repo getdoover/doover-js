@@ -91,3 +91,12 @@ export const ALL_CAPABILITIES: readonly Capability[] = [
   "turn.credentials",
   "users.me",
 ] as const;
+
+// Compile-time guard: every Capability must appear in ALL_CAPABILITIES (and vice versa).
+// If this errors, add/remove the missing member from ALL_CAPABILITIES.
+type _CapabilityCoverage = Exclude<Capability, (typeof ALL_CAPABILITIES)[number]> extends never
+  ? Exclude<(typeof ALL_CAPABILITIES)[number], Capability> extends never
+    ? true
+    : never
+  : never;
+void (true as _CapabilityCoverage);

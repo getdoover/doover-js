@@ -17,6 +17,7 @@ describe("DataClient errors", () => {
   it("AmbiguousWriteError lists candidate source ids", () => {
     const err = new AmbiguousWriteError("messages.post", ["cloud", "local:1"]);
     expect(err).to.be.instanceOf(DooverApiError);
+    expect(err.capability).to.equal("messages.post");
     expect(err.candidateSourceIds).to.deep.equal(["cloud", "local:1"]);
     expect(err.message).to.include("cloud");
     expect(err.message).to.include("local:1");

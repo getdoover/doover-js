@@ -29,7 +29,9 @@ export interface SourceProvenanceViaRest {
   method: string;
   /** The input the caller passed (agentId, channelName, params, body summary). */
   request: Record<string, unknown>;
-  startedAt: number; // epoch ms
+  /** When the request was dispatched (epoch ms). */
+  startedAt: number;
+  /** Time from dispatch to response completion (ms). */
   durationMs: number;
   /** HTTP status, when known. */
   status?: number;

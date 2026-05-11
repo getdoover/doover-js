@@ -24,6 +24,7 @@ export class UnsupportedCapabilityError extends DooverApiError {
     this.name = "UnsupportedCapabilityError";
     this.capability = capability;
     this.clientId = clientId;
+    Object.setPrototypeOf(this, UnsupportedCapabilityError.prototype);
   }
 }
 
@@ -50,5 +51,6 @@ export class AmbiguousWriteError extends DooverApiError {
     this.name = "AmbiguousWriteError";
     this.capability = capability;
     this.candidateSourceIds = candidateSourceIds;
+    Object.setPrototypeOf(this, AmbiguousWriteError.prototype);
   }
 }
