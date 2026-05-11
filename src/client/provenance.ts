@@ -4,6 +4,32 @@ import type {
   SourceProvenanceViaRest,
 } from "../types/provenance";
 
+/** A stamped value: adds `__source` to plain objects and their array elements.
+ *  For object values, also adds `__source` to any known nested-object props
+ *  (aggregate, message) and stamps elements of array-valued props. */
+type StampedElement<T> = T extends Record<string, unknown>
+  ? T & { __source?: SourceProvenance }
+  : T;
+
+type StampedProp<V> = V extends (infer E)[]
+  ? StampedElement<E>[]
+  : V extends Record<string, unknown>
+    ? V & { __source?: SourceProvenance }
+    : V;
+
+type Stamped<T> = T extends (infer E)[]
+  ? StampedElement<E>[]
+  : T extends Record<string, unknown>
+    ? { [K in keyof T]: StampedProp<T[K]> } & { __source?: SourceProvenance }
+    : T;
+
+/** Map a subclient type so that async methods return Stamped results. */
+type WrappedSubclient<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
+    ? (...args: A) => Promise<Stamped<R>>
+    : T[K];
+};
+
 export interface ClientIdentity {
   id: string;
   kind: string;
@@ -41,7 +67,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 export class ProvenanceStamper {
   constructor(private readonly identity: ClientIdentity) {}
 
-  stampRest<T>(value: T, ctx: RestContext): T {
+  stampRest<T>(value: T, ctx: RestContext): Stamped<T> {
     const via: SourceProvenanceViaRest = {
       transport: "rest",
       method: ctx.method,
@@ -50,17 +76,17 @@ export class ProvenanceStamper {
       durationMs: ctx.durationMs,
       ...(ctx.status !== undefined ? { status: ctx.status } : {}),
     };
-    return this.stampGraph(value, via);
+    return this.stampGraph(value, via) as Stamped<T>;
   }
 
-  stampGatewayEvent<T>(value: T, ctx: GatewayContext): T {
+  stampGatewayEvent<T>(value: T, ctx: GatewayContext): Stamped<T> {
     const via: SourceProvenanceViaGateway = {
       transport: "gateway",
       event: ctx.event,
       ...(ctx.sessionId !== undefined ? { sessionId: ctx.sessionId } : {}),
       receivedAt: Date.now(),
     };
-    return this.stampGraph(value, via);
+    return this.stampGraph(value, via) as Stamped<T>;
   }
 
   /** Build the full provenance envelope from a `via`. */
@@ -102,7 +128,7 @@ export function wrapSubclient<T extends object>(
   api: T,
   subclientName: string,
   stamper: ProvenanceStamper,
-): T {
+): WrappedSubclient<T> {
   return new Proxy(api, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
@@ -124,7 +150,7 @@ export function wrapSubclient<T extends object>(
         return out;
       };
     },
-  }) as T;
+  }) as unknown as WrappedSubclient<T>;
 }
 
 /** Keep `via.request` small: drop FormData/Blob bodies, cap string length. */
