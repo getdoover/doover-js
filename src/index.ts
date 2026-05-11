@@ -1,4 +1,6 @@
 export { DooverClient } from "./client/doover-client";
+export { LocalAgentClient } from "./client/local-agent-client";
+export type { LocalAgentClientConfig } from "./client/local-agent-client";
 export {
   getDooverClient,
   peekDooverClient,

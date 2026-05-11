@@ -4,7 +4,11 @@ import { describe, it } from "mocha";
 import * as doover from "../index";
 import type { DataClient, AgentScope, DataClientStatus, SourceProvenance } from "../index";
 
-describe("public exports (Phase 1)", () => {
+describe("public exports (Phase 1–3)", () => {
+  it("exports LocalAgentClient", () => {
+    expect(doover.LocalAgentClient).to.be.a("function");
+  });
+
   it("exports the new capability/contract symbols", () => {
     expect(doover.ALL_CAPABILITIES).to.be.an("array");
     expect(doover.UnsupportedCapabilityError).to.be.a("function");
