@@ -1,6 +1,13 @@
 export { DooverClient } from "./client/doover-client";
 export { LocalAgentClient } from "./client/local-agent-client";
 export type { LocalAgentClientConfig } from "./client/local-agent-client";
+export { MultiplexClient } from "./client/multiplex-client";
+export type {
+  MultiplexClientOptions,
+  SourceDescriptor,
+  RegisteredSource,
+  MultiplexConflict,
+} from "./client/multiplex-client";
 export {
   getDooverClient,
   peekDooverClient,
