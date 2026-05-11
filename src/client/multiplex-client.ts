@@ -8,9 +8,11 @@ import type {
 import { dedupeBy, mergeMessages } from "./multiplex-merge";
 import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors";
 import { extractSnowflakeId } from "../utils/snowflake";
+import { MultiplexGateway, type MultiplexGatewayHost } from "./multiplex-gateway";
 
 export type { DataClient } from "./data-client";
 export type { AgentScope } from "./data-client";
+export type { DataClientStatus } from "./data-client";
 
 export interface MultiplexConflict {
   method: string;
@@ -129,6 +131,9 @@ export class MultiplexClient implements DataClient {
   private capabilitiesCache: ReadonlySet<Capability> | null = null;
   private lastConflicts: MultiplexConflict[] = [];
   private readonly maxConflicts = 50;
+  private readonly statusListeners = new Set<(status: DataClientStatus) => void>();
+  /** sourceId → member unsubscribe fn for its onStatusChange. */
+  private readonly memberStatusUnsubs = new Map<string, () => void>();
 
   constructor(options: MultiplexClientOptions) {
     this.factory = options.factory;
@@ -258,14 +263,36 @@ export class MultiplexClient implements DataClient {
   }
   protected emit(event: MuxEvent, ...args: unknown[]): void {
     this.eventListeners.get(event)?.forEach((h) => h(...args));
+    // keep status observers in sync whenever the member set changes
+    if (event === "change") this.emitStatus();
   }
 
   private invalidateCapabilities(): void { this.capabilitiesCache = null; }
 
-  // --- placeholders filled in later sub-phases (4c) ---
-  private attachMemberListeners(_src: RegisteredSource): void { /* Task 27 */ }
-  private detachMemberListeners(_src: RegisteredSource): void { /* Task 27 */ }
-  private makeCompositeGateway(): GatewayClientLike { return new Proxy({}, { get: (_t, prop) => () => Promise.reject(new Error(`MultiplexClient: gateway.${String(prop)} not yet implemented (4c)`)) }) as GatewayClientLike; }
+  private attachMemberListeners(src: RegisteredSource): void {
+    if (!src.client) return;
+    if (this.memberStatusUnsubs.has(src.descriptor.id)) return;
+    const unsub = src.client.onStatusChange(() => this.emitStatus());
+    this.memberStatusUnsubs.set(src.descriptor.id, unsub);
+  }
+
+  private detachMemberListeners(src: RegisteredSource): void {
+    const unsub = this.memberStatusUnsubs.get(src.descriptor.id);
+    if (unsub) { unsub(); this.memberStatusUnsubs.delete(src.descriptor.id); }
+  }
+
+  private makeCompositeGateway(): GatewayClientLike {
+    const host: MultiplexGatewayHost = {
+      gatewayMembers: () =>
+        this.enabledClients()
+          .filter(({ client }) => client.supports("gateway.subscribe"))
+          .map(({ id, client }) => ({ id, gateway: client.gateway })),
+      gatewayMembersForAgent: (agentId) =>
+        this.membersForAgentWithCapability(agentId, "gateway.subscribe")
+          .map(({ id, client }) => ({ id, gateway: client.gateway })),
+    };
+    return new MultiplexGateway(host);
+  }
 
   // ===== helpers =====
 
@@ -654,8 +681,60 @@ export class MultiplexClient implements DataClient {
     return { mode: "list", agentIds: [...ids] };
   }
 
-  // --- placeholder DataClient methods — filled in Task 27 (status) ---
-  isConnected(): boolean { return false; }
-  getStatus(): DataClientStatus { return { clientId: this.clientId, connected: false, state: "disconnected", agentScope: "unknown", at: Date.now() }; }
-  onStatusChange(_l: (s: DataClientStatus) => void): () => void { return () => {}; }
+  isConnected(): boolean {
+    const gwMembers = this.enabledClients().filter(({ client }) => client.supports("gateway.subscribe"));
+    if (gwMembers.length === 0) return false;
+    return gwMembers.every(({ client }) => client.isConnected());
+  }
+
+  getStatus(): DataClientStatus {
+    const allSources = this.getRegisteredSources();
+    const members = allSources.map((s) => ({
+      sourceId: s.descriptor.id,
+      ...(s.descriptor.label ? { label: s.descriptor.label } : {}),
+      status: s.enabled && s.client
+        ? s.client.getStatus()
+        : ({ clientId: s.descriptor.id, connected: false, state: "disconnected" as const, agentScope: "unknown" as const, at: Date.now() }),
+    }));
+    const enabledMembers = members.filter((m) => this.registry.get(m.sourceId)?.enabled);
+    const gwStatuses = enabledMembers
+      .filter((m) => this.registry.get(m.sourceId)!.client?.supports("gateway.subscribe"))
+      .map((m) => m.status);
+    const connected = this.isConnected();
+    let state: DataClientStatus["state"];
+    if (enabledMembers.some((m) => m.status.state === "error")) state = "error";
+    else if (gwStatuses.length === 0) state = "disconnected";
+    else if (gwStatuses.every((s) => s.connected)) state = "connected";
+    else if (gwStatuses.some((s) => s.connected)) state = "degraded";
+    else if (gwStatuses.some((s) => s.state === "connecting")) state = "connecting";
+    else state = "disconnected";
+    // most-recent member values for scalar summary fields (locked decision #8)
+    const newest = [...enabledMembers.map((m) => m.status)].sort((x, y) => y.at - x.at)[0];
+    const gatewaySession = this.gateway.getSession();
+    return {
+      clientId: this.clientId,
+      connected,
+      state,
+      session: gatewaySession ? { id: (gatewaySession as { session_id?: string }).session_id ?? "" } : null,
+      ...(newest?.lastEvent ? { lastEvent: newest.lastEvent } : {}),
+      latencyMs: newest?.latencyMs ?? null,
+      ...(newest?.lastError ? { lastError: newest.lastError } : {}),
+      agentScope: this.getKnownAgentScope(),
+      at: Date.now(),
+      members,
+    };
+  }
+
+  onStatusChange(listener: (status: DataClientStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    let active = true;
+    return () => { if (!active) return; active = false; this.statusListeners.delete(listener); };
+  }
+
+  private emitStatus(): void {
+    // Guard: during construction `this.gateway` may not be assigned yet.
+    if (!this.gateway) return;
+    const snap = this.getStatus();
+    this.statusListeners.forEach((l) => l(snap));
+  }
 }
