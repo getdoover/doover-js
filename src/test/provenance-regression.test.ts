@@ -41,7 +41,7 @@ describe("provenance is additive only", () => {
     expect(msgs).to.have.length(2);
     expect(msgs[0].__source?.via).to.include({ method: "messages.listMessages" });
     // shape minus __source and the client-added `timestamp` matches the wire item
-    const { __source: _s, timestamp: _t, ...rest } = msgs[0] as Record<string, unknown>;
+    const { __source: _s, timestamp: _t, ...rest } = msgs[0] as unknown as Record<string, unknown>;
     expect(rest).to.deep.equal(wire[0]);
   });
 });
