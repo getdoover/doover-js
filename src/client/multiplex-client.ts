@@ -5,9 +5,81 @@ import type {
   MessagesApiLike, NotificationsApiLike, PermissionsApiLike, ProcessorsApiLike,
   RpcDispatcherLike, TurnApiLike, UsersApiLike,
 } from "./data-client";
+import { dedupeBy, mergeMessages } from "./multiplex-merge";
+import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors";
+import { extractSnowflakeId } from "../utils/snowflake";
 
 export type { DataClient } from "./data-client";
 export type { AgentScope } from "./data-client";
+
+export interface MultiplexConflict {
+  method: string;
+  agentId: string;
+  channelName: string;
+  /** All owning members that returned a value (in member order). */
+  sourceIds: string[];
+  /** The values, parallel to `sourceIds`. The chosen one is index 0. */
+  values: unknown[];
+  at: number;
+}
+
+type MethodKind = "read-fanout-first" | "write-route";
+interface MethodSpec { cap: Capability; kind: MethodKind; agentScoped: boolean }
+
+/** "<subclient>.<method>" → spec. Drives the generic non-core facades. */
+const NONCORE_METHODS: Record<string, MethodSpec> = {
+  // alarms
+  "alarms.listAlarms": { cap: "alarms.read", kind: "read-fanout-first", agentScoped: true },
+  "alarms.getAlarm": { cap: "alarms.read", kind: "read-fanout-first", agentScoped: true },
+  "alarms.createAlarm": { cap: "alarms.write", kind: "write-route", agentScoped: true },
+  "alarms.putAlarm": { cap: "alarms.write", kind: "write-route", agentScoped: true },
+  "alarms.patchAlarm": { cap: "alarms.write", kind: "write-route", agentScoped: true },
+  "alarms.deleteAlarm": { cap: "alarms.write", kind: "write-route", agentScoped: true },
+  // connections
+  "connections.getAgentConnections": { cap: "connections.read", kind: "read-fanout-first", agentScoped: true },
+  "connections.getAgentConnectionHistory": { cap: "connections.read", kind: "read-fanout-first", agentScoped: true },
+  "connections.getAgentSubscriptionHistory": { cap: "connections.read", kind: "read-fanout-first", agentScoped: true },
+  "connections.getConnection": { cap: "connections.read", kind: "read-fanout-first", agentScoped: false },
+  "connections.getChannelSubscriptions": { cap: "connections.read", kind: "read-fanout-first", agentScoped: true },
+  "connections.syncConnection": { cap: "connections.write", kind: "write-route", agentScoped: true },
+  // notifications (reads)
+  "notifications.getAgentNotifications": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getAgentNotificationEndpoints": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getAgentNotificationSubscriptions": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getAgentDefaultNotificationSubscriptions": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getAgentNotificationSubscribers": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getWebPushPublicKey": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: false },
+  // notifications (writes)
+  "notifications.createNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.updateNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.deleteNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.testNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.createNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.deleteDefaultNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.updateNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.deleteNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.updateMeWebPushEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: false },
+  // permissions
+  "permissions.getAgentPermission": { cap: "permissions.read", kind: "read-fanout-first", agentScoped: true },
+  "permissions.getAgentPermissionDebug": { cap: "permissions.read", kind: "read-fanout-first", agentScoped: true },
+  "permissions.syncPermissions": { cap: "permissions.write", kind: "write-route", agentScoped: false },
+  // processors
+  "processors.getScheduleInfo": { cap: "processors.read", kind: "read-fanout-first", agentScoped: false },
+  "processors.getScheduleInfoAlias": { cap: "processors.read", kind: "read-fanout-first", agentScoped: false },
+  "processors.getProcessorSubscriptionInfo": { cap: "processors.read", kind: "read-fanout-first", agentScoped: false },
+  "processors.getProcessorSubscriptionInfoAlias": { cap: "processors.read", kind: "read-fanout-first", agentScoped: false },
+  "processors.createProcessorSchedule": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.deleteProcessorSchedule": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.regenerateScheduleToken": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.createProcessorSubscription": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.deleteProcessorSubscription": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.createIngestionEndpoint": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.deleteIngestionEndpoint": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  "processors.invokeIngestionEndpoint": { cap: "processors.write", kind: "write-route", agentScoped: true },
+  // turn / users
+  "turn.createTurnToken": { cap: "turn.credentials", kind: "read-fanout-first", agentScoped: false },
+  "users.getMe": { cap: "users.me", kind: "read-fanout-first", agentScoped: false },
+};
 
 /** A serialisable description of a source. */
 export interface SourceDescriptor {
@@ -55,6 +127,8 @@ export class MultiplexClient implements DataClient {
   private readonly clientId: string;
   private readonly eventListeners = new Map<MuxEvent, Set<(...args: unknown[]) => void>>();
   private capabilitiesCache: ReadonlySet<Capability> | null = null;
+  private lastConflicts: MultiplexConflict[] = [];
+  private readonly maxConflicts = 50;
 
   constructor(options: MultiplexClientOptions) {
     this.factory = options.factory;
@@ -67,10 +141,10 @@ export class MultiplexClient implements DataClient {
       : (options.enable ?? []);
     for (const id of toEnable) this.enableSource(id);
 
-    this.agents = this.makeReadFacade<AgentsApiLike>("agents");
-    this.channels = this.makeReadFacade<ChannelsApiLike>("channels");
-    this.messages = this.makeReadFacade<MessagesApiLike>("messages");
-    this.aggregates = this.makeReadFacade<AggregatesApiLike>("aggregates");
+    this.agents = this.makeAgentsFacade();
+    this.channels = this.makeChannelsFacade();
+    this.messages = this.makeMessagesFacade();
+    this.aggregates = this.makeAggregatesFacade();
     this.alarms = this.makeReadFacade<AlarmsApiLike>("alarms");
     this.connections = this.makeReadFacade<ConnectionsApiLike>("connections");
     this.notifications = this.makeReadFacade<NotificationsApiLike>("notifications");
@@ -188,14 +262,344 @@ export class MultiplexClient implements DataClient {
 
   private invalidateCapabilities(): void { this.capabilitiesCache = null; }
 
-  // --- placeholders filled in later sub-phases (4b / 4c) ---
+  // --- placeholders filled in later sub-phases (4c) ---
   private attachMemberListeners(_src: RegisteredSource): void { /* Task 27 */ }
   private detachMemberListeners(_src: RegisteredSource): void { /* Task 27 */ }
-  private makeReadFacade<T extends object>(name: string): T {
-    return new Proxy({}, { get: (_t, prop) => () => Promise.reject(new Error(`MultiplexClient: ${name}.${String(prop)} not yet implemented (4b)`)) }) as T;
+  private makeCompositeGateway(): GatewayClientLike { return new Proxy({}, { get: (_t, prop) => () => Promise.reject(new Error(`MultiplexClient: gateway.${String(prop)} not yet implemented (4c)`)) }) as GatewayClientLike; }
+
+  // ===== helpers =====
+
+  /** Resolve the optional `{ sources?: string[] }` bag from a method's trailing
+   *  arg: returns the candidate members, narrowed to `sources` if given (each
+   *  must be enabled), still capability-filtered by the caller. The bag is the
+   *  LAST argument if it is a plain object with a `sources` array. */
+  private splitSourcesOption(args: unknown[]): { args: unknown[]; sources?: string[] } {
+    const last = args[args.length - 1];
+    if (last && typeof last === "object" && !Array.isArray(last) && Array.isArray((last as { sources?: unknown }).sources)) {
+      return { args: args.slice(0, -1), sources: (last as { sources: string[] }).sources };
+    }
+    return { args };
   }
-  private makeRpcFacade(): RpcDispatcherLike { return this.makeReadFacade<RpcDispatcherLike>("rpc"); }
-  private makeCompositeGateway(): GatewayClientLike { return this.makeReadFacade<GatewayClientLike>("gateway"); }
+
+  private candidates(agentId: string | undefined, cap: Capability, sources?: string[]) {
+    let members = this.membersForAgentWithCapability(agentId, cap);
+    if (sources) {
+      const allow = new Set(sources);
+      members = members.filter((m) => allow.has(m.id));
+    }
+    return members;
+  }
+
+  /** Throw if no enabled member supports `cap` at all (regardless of agent). */
+  private assertSomeMemberSupports(cap: Capability): void {
+    if (!this.enabledClients().some(({ client }) => client.supports(cap))) {
+      throw new UnsupportedCapabilityError(cap, this.clientId);
+    }
+  }
+
+  private isNotFound(err: unknown): boolean {
+    return !!err && typeof err === "object" && (err as { status?: number }).status === 404;
+  }
+
+  private requiredMessagesCapability(params?: { before?: string; after?: string }): Capability {
+    if (params?.after) return "messages.listHistorical";
+    if (params?.before) {
+      try {
+        const { timestamp: ts } = extractSnowflakeId(params.before);
+        if (typeof ts === "number" && ts < Date.now() - 24 * 60 * 60 * 1000) return "messages.listHistorical";
+      } catch { /* not a valid snowflake, treat as latest */ }
+    }
+    return "messages.list";
+  }
+
+  private unsupportedMethod(_method: string, cap: Capability) {
+    return () => Promise.reject(new UnsupportedCapabilityError(cap, this.clientId));
+  }
+
+  private guessNonCoreCap(subclient: string): Capability {
+    switch (subclient) {
+      case "alarms": return "alarms.read";
+      case "connections": return "connections.read";
+      case "notifications": return "notifications.read";
+      case "permissions": return "permissions.read";
+      case "processors": return "processors.read";
+      case "turn": return "turn.credentials";
+      case "users": return "users.me";
+      default: return "channels.get";
+    }
+  }
+
+  protected recordConflict(method: string, agentId: string, channelName: string, values: Array<{ value: unknown; id: string }>): void {
+    // Only a conflict if the values differ (cheap structural compare).
+    const json = values.map((v) => JSON.stringify(v.value, (k, val) => (k === "__source" ? undefined : val)));
+    const allEqual = json.every((j) => j === json[0]);
+    if (allEqual) return;
+    const conflict: MultiplexConflict = { method, agentId, channelName, sourceIds: values.map((v) => v.id), values: values.map((v) => v.value), at: Date.now() };
+    this.lastConflicts.push(conflict);
+    if (this.lastConflicts.length > this.maxConflicts) this.lastConflicts.shift();
+    this.emit("conflict", conflict);
+  }
+
+  getLastConflicts(): readonly MultiplexConflict[] { return this.lastConflicts; }
+
+  /**
+   * Returns a method that routes a write to exactly one member:
+   *  (a) `{ sources: [oneId] }` scoping → that member;
+   *  (b) else the single enabled member that owns the targeted agent and has `cap`;
+   *  (c) else `UnsupportedCapabilityError` (none) or `AmbiguousWriteError` (>1).
+   * The targeted agent id is `args[0]` (string form) or `args[0].agentId` (identifier form).
+   * Writes are never fanned out.
+   */
+  private routedWrite(method: string, cap: Capability) {
+    const self = this;
+    return async function (...rawArgs: unknown[]) {
+      const { args, sources } = self.splitSourcesOption(rawArgs);
+      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      let members = self.candidates(agentId, cap, sources);
+      if (sources && sources.length === 1) {
+        const only = members.find((m) => m.id === sources[0]);
+        if (!only) throw new UnsupportedCapabilityError(cap, sources[0]);
+        members = [only];
+      }
+      if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
+      if (members.length > 1) throw new AmbiguousWriteError(cap, members.map((m) => m.id));
+      const target = members[0];
+      const subclient = method.split(".")[0] as keyof DataClient;
+      const fnName = method.split(".")[1];
+      const fn = (target.client[subclient] as Record<string, (...a: unknown[]) => unknown>)[fnName];
+      return fn.apply(target.client[subclient], args);
+    };
+  }
+
+  /** Agent-scoped "first success" — used by messages.getTimeseries / getInvocationLogs. */
+  private makeFanoutFirst(method: string, cap: Capability) {
+    const self = this;
+    return async function (...rawArgs: unknown[]) {
+      const { args, sources } = self.splitSourcesOption(rawArgs);
+      self.assertSomeMemberSupports(cap);
+      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      const members = self.candidates(agentId, cap, sources);
+      if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
+      const subclient = method.split(".")[0] as keyof DataClient;
+      const fnName = method.split(".")[1];
+      let lastErr: unknown;
+      for (const m of members) {
+        try {
+          return await (m.client[subclient] as Record<string, (...a: unknown[]) => unknown>)[fnName](...args);
+        } catch (e) { lastErr = e; if (!self.isNotFound(e)) throw e; }
+      }
+      throw lastErr ?? new Error(`${method}: no member returned a result`);
+    };
+  }
+
+  /** Used by messages.getMessageAttachment — returns the first member that yields a Blob. */
+  private makeBlobFanout(method: string, cap: Capability) {
+    const self = this;
+    return async function (...rawArgs: unknown[]) {
+      const { args, sources } = self.splitSourcesOption(rawArgs);
+      self.assertSomeMemberSupports(cap);
+      const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId;
+      const members = self.candidates(agentId, cap, sources);
+      if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
+      const subclient = method.split(".")[0] as keyof DataClient;
+      const fnName = method.split(".")[1];
+      let lastErr: unknown;
+      for (const m of members) {
+        try {
+          return await (m.client[subclient] as unknown as Record<string, (...a: unknown[]) => Promise<Blob>>)[fnName](...args);
+        } catch (e) { lastErr = e; if (!self.isNotFound(e)) throw e; }
+      }
+      throw lastErr ?? new Error(`${method}: no member returned a result`);
+    };
+  }
+
+  // ===== core facades =====
+
+  private makeChannelsFacade(): ChannelsApiLike {
+    const self = this;
+    return {
+      async listChannels(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        self.assertSomeMemberSupports("channels.list");
+        const members = self.candidates(agentId, "channels.list", sources);
+        const perMember = await Promise.all(members.map((m) => (m.client.channels.listChannels as (...a: unknown[]) => Promise<unknown[]>)(...args)));
+        return dedupeBy(([] as unknown[]).concat(...perMember) as { name: string }[], (c) => c.name) as never;
+      },
+      async getChannel(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const name = typeof args[0] === "string" ? (args[1] as string) : (args[0] as { channelName: string }).channelName;
+        self.assertSomeMemberSupports("channels.get");
+        const members = self.candidates(agentId, "channels.get", sources);
+        const settled = await Promise.allSettled(members.map((m) => (m.client.channels.getChannel as (...a: unknown[]) => Promise<unknown>)(...args)));
+        const ok = settled.flatMap((r, i) => r.status === "fulfilled" ? [{ value: r.value, id: members[i].id }] : (r.status === "rejected" && !self.isNotFound(r.reason) ? (() => { throw r.reason; })() : []));
+        if (ok.length === 0) { const e = new Error(`channel ${agentId}/${name} not found`) as Error & { status: number }; e.status = 404; throw e; }
+        if (ok.length > 1) self.recordConflict("channels.getChannel", agentId, name, ok);
+        return ok[0].value as never;
+      },
+      createChannel: self.routedWrite("channels.createChannel", "channels.create") as never,
+      putChannel: self.routedWrite("channels.putChannel", "channels.create") as never,
+      archiveChannel: self.routedWrite("channels.archiveChannel", "channels.archive") as never,
+      unarchiveChannel: self.routedWrite("channels.unarchiveChannel", "channels.archive") as never,
+      listDataSeries: self.unsupportedMethod("channels.listDataSeries", "channels.dataSeries") as never,
+    } as ChannelsApiLike;
+  }
+
+  private makeAggregatesFacade(): AggregatesApiLike {
+    const self = this;
+    return {
+      async getAggregate(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const name = typeof args[0] === "string" ? (args[1] as string) : (args[0] as { channelName: string }).channelName;
+        self.assertSomeMemberSupports("aggregates.get");
+        const members = self.candidates(agentId, "aggregates.get", sources);
+        const settled = await Promise.allSettled(members.map((m) => (m.client.aggregates.getAggregate as (...a: unknown[]) => Promise<unknown>)(...args)));
+        const ok = settled.flatMap((r, i) => r.status === "fulfilled" ? [{ value: r.value, id: members[i].id }] : (r.status === "rejected" && !self.isNotFound(r.reason) ? (() => { throw r.reason; })() : []));
+        if (ok.length === 0) { const e = new Error(`aggregate ${agentId}/${name} not found`) as Error & { status: number }; e.status = 404; throw e; }
+        if (ok.length > 1) self.recordConflict("aggregates.getAggregate", agentId, name, ok);
+        return ok[0].value as never;
+      },
+      putAggregate: self.routedWrite("aggregates.putAggregate", "aggregates.put") as never,
+      patchAggregate: self.routedWrite("aggregates.patchAggregate", "aggregates.patch") as never,
+      async getAggregateAttachment(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        self.assertSomeMemberSupports("aggregates.attachment");
+        const members = self.candidates(agentId, "aggregates.attachment", sources);
+        for (const m of members) {
+          try { return await (m.client.aggregates.getAggregateAttachment as (...a: unknown[]) => Promise<Blob>)(...args); }
+          catch (e) { if (!self.isNotFound(e)) throw e; }
+        }
+        const e = new Error("attachment not found") as Error & { status: number }; e.status = 404; throw e;
+      },
+    } as AggregatesApiLike;
+  }
+
+  private makeMessagesFacade(): MessagesApiLike {
+    const self = this;
+    return {
+      async listMessages(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        const params = (typeof args[0] === "string" ? args[2] : args[1]) as { order?: "asc" | "desc"; limit?: number; before?: string; after?: string } | undefined;
+        const implied = self.requiredMessagesCapability(params);
+        // a member is eligible if it has the implied cap; for "latest N" that IS messages.list.
+        self.assertSomeMemberSupports(implied);
+        const members = self.candidates(agentId, implied, sources);
+        const perMember = await Promise.all(members.map((m) => (m.client.messages.listMessages as (...a: unknown[]) => Promise<unknown[]>)(...args)));
+        return mergeMessages(perMember as never, { order: params?.order ?? "desc", limit: params?.limit }) as never;
+      },
+      async getMessage(agentIdOrId: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
+        const agentId = typeof args[0] === "string" ? args[0] : (args[0] as { agentId: string }).agentId;
+        self.assertSomeMemberSupports("messages.get");
+        const members = self.candidates(agentId, "messages.get", sources);
+        for (const m of members) {
+          try { return await (m.client.messages.getMessage as (...a: unknown[]) => Promise<unknown>)(...args) as never; }
+          catch (e) { if (!self.isNotFound(e)) throw e; }
+        }
+        const e = new Error("message not found") as Error & { status: number }; e.status = 404; throw e;
+      },
+      postMessage: self.routedWrite("messages.postMessage", "messages.post") as never,
+      putMessage: self.routedWrite("messages.putMessage", "messages.put") as never,
+      patchMessage: self.routedWrite("messages.patchMessage", "messages.put") as never,
+      deleteMessage: self.routedWrite("messages.deleteMessage", "messages.delete") as never,
+      getTimeseries: self.makeFanoutFirst("messages.getTimeseries", "messages.timeseries") as never,
+      getMessageAttachment: self.makeBlobFanout("messages.getMessageAttachment", "messages.attachment") as never,
+      getInvocationLogs: self.makeFanoutFirst("messages.getInvocationLogs", "messages.invocationLogs") as never,
+      createMultipartPayload(jsonPayload: Record<string, unknown>, attachments: Array<Blob | File>) {
+        // pure helper — no member needed; mirror MessagesApi.createMultipartPayload
+        const formData = new FormData();
+        formData.set("json_payload", JSON.stringify(jsonPayload));
+        attachments.forEach((attachment, index) => {
+          formData.set(`attachment-${index}`, attachment);
+        });
+        return formData;
+      },
+    } as MessagesApiLike;
+  }
+
+  private makeAgentsFacade(): AgentsApiLike {
+    const self = this;
+    return {
+      async listAgents(...rawArgs: unknown[]) {
+        const { args, sources } = self.splitSourcesOption(rawArgs);
+        self.assertSomeMemberSupports("agents.list");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.list"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.listAgents as (...a: unknown[]) => Promise<{ agents?: unknown[]; results?: unknown[] }>)(...args)));
+        const merged = dedupeBy(([] as { id: string }[]).concat(...responses.map((r) => (r.agents ?? r.results ?? []) as { id: string }[])), (a) => a.id);
+        return { agents: merged, results: merged, count: merged.length } as never;
+      },
+      async getMultiAgentMessages(channelName: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([channelName, ...rest]);
+        self.assertSomeMemberSupports("agents.multiAgentMessages");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentMessages"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentMessages as (...a: unknown[]) => Promise<{ results: { id: string }[] }>)(...args)));
+        const merged = mergeMessages(responses.map((r) => r.results) as never, { order: "desc" });
+        return { results: merged, count: merged.length } as never;
+      },
+      async getMultiAgentAggregates(channelName: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([channelName, ...rest]);
+        self.assertSomeMemberSupports("agents.multiAgentAggregates");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentAggregates"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentAggregates as (...a: unknown[]) => Promise<{ results: { agent_id: string }[] }>)(...args)));
+        const merged = dedupeBy(([] as { agent_id: string }[]).concat(...responses.map((r) => r.results)), (a) => a.agent_id);
+        return { results: merged, count: merged.length } as never;
+      },
+    } as AgentsApiLike;
+  }
+
+  // ===== non-core generic facade =====
+
+  private makeReadFacade<T extends object>(subclientName: string): T {
+    const self = this;
+    return new Proxy({}, {
+      get(_t, prop) {
+        if (typeof prop !== "string") return undefined;
+        const key = `${subclientName}.${prop}`;
+        const spec = NONCORE_METHODS[key];
+        if (!spec) {
+          // Unknown method on a non-core subclient — treat as unsupported (read).
+          return () => Promise.reject(new UnsupportedCapabilityError(self.guessNonCoreCap(subclientName), self.clientId));
+        }
+        if (spec.kind === "write-route") {
+          return self.routedWrite(key, spec.cap);
+        }
+        return async (...rawArgs: unknown[]) => {
+          const { args, sources } = self.splitSourcesOption(rawArgs);
+          self.assertSomeMemberSupports(spec.cap);
+          const agentId = !spec.agentScoped ? undefined
+            : (typeof args[0] === "string" ? args[0] : (args[0] as { agentId?: string } | undefined)?.agentId);
+          let members = self.candidates(agentId, spec.cap, sources);
+          if (members.length === 0) throw new UnsupportedCapabilityError(spec.cap, self.clientId);
+          let lastErr: unknown;
+          for (const m of members) {
+            try {
+              return await (m.client[subclientName as keyof DataClient] as Record<string, (...a: unknown[]) => unknown>)[prop](...args);
+            } catch (e) { lastErr = e; if (!self.isNotFound(e)) throw e; }
+          }
+          throw lastErr ?? new Error(`${key}: no member returned a result`);
+        };
+      },
+    }) as T;
+  }
+
+  private makeRpcFacade(): RpcDispatcherLike {
+    const self = this;
+    return {
+      setStats() { /* no-op for the multiplex; members keep their own stats */ },
+      send(channel: { agentId: string; channelName: string }, request: unknown, options?: unknown) {
+        // route like a write keyed on channel.agentId
+        const router = self.routedWrite("rpc.send", "rpc.send");
+        return router(channel, request, options) as never;
+      },
+    } as RpcDispatcherLike;
+  }
 
   // --- DataClient: capabilities ---
   getCapabilities(): ReadonlySet<Capability> {
