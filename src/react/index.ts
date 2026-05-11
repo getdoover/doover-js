@@ -29,6 +29,7 @@ export type {
 export { useAgentChannel } from "./useAgentChannel";
 
 export { useSendMessage } from "./useSendMessage";
+export type { UseSendMessageOptions } from "./useSendMessage";
 export { useUpdateAggregate } from "./useUpdateAggregate";
 export type { UseUpdateAggregateOptions } from "./useUpdateAggregate";
 export { useUpdateMessage } from "./useUpdateMessage";

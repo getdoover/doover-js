@@ -10,8 +10,10 @@ import { useChannelSubscription } from "./useChannelSubscription";
 export function channelAggregateQueryKey(
   agentId: string | undefined,
   channelName: string | undefined,
+  sources?: string[],
 ) {
-  return ["doover", "agent", agentId, "channel", channelName] as const;
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
+  return ["doover", "agent", agentId, "channel", channelName, "src", sourceDim] as const;
 }
 
 /**
@@ -48,6 +50,13 @@ export interface UseChannelAggregateOptions {
    * `AggregateUpdate` events.
    */
   fetchInitial?: boolean;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 /**
@@ -68,16 +77,17 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const { agentId, channelName } = identifier;
-  const key = channelAggregateQueryKey(agentId, channelName);
+  const sources = options?.sources;
+  const key = channelAggregateQueryKey(agentId, channelName, sources);
   const fetchInitial = options?.fetchInitial ?? true;
 
   const onAggregate = useCallback(
     (aggregate: Aggregate) => {
       queryClient.setQueryData(key, aggregate as Aggregate<TData>);
     },
-    // The key array is structurally stable per (agentId, channelName).
+    // The key array is structurally stable per (agentId, channelName, sourceDim).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName],
+    [queryClient, agentId, channelName, sources?.join(",")],
   );
 
   useChannelSubscription(identifier, { onAggregate });
@@ -88,9 +98,18 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
     staleTime: Infinity,
     queryFn: async () => {
       if (!agentId || !channelName) return undefined;
-      const channel = await client.channels.getChannel({ agentId, channelName });
+      const id = { agentId, channelName };
+      // Pass `{ sources }` as a trailing bag only when set. The TypeScript
+      // overloads don't declare it, so we cast through `never` — the runtime
+      // implementation reads it via `...args: unknown[]`.
+      const sourcesArg = sources ? { sources } : undefined;
+      const channel = sourcesArg
+        ? await (client.channels.getChannel as unknown as (...a: unknown[]) => Promise<{ aggregate?: unknown }>)(id, sourcesArg)
+        : await client.channels.getChannel(id);
       if (channel.aggregate) return channel.aggregate as Aggregate<TData>;
-      return (await client.aggregates.getAggregate({ agentId, channelName })) as Aggregate<TData>;
+      return (sourcesArg
+        ? await (client.aggregates.getAggregate as unknown as (...a: unknown[]) => Promise<Aggregate<TData>>)(id, sourcesArg)
+        : await client.aggregates.getAggregate(id)) as Aggregate<TData>;
     },
     // A 404 means the aggregate doesn't exist — retrying won't change that,
     // and the caller needs the error promptly to render an empty/"not

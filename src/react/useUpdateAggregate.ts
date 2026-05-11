@@ -15,6 +15,12 @@ export interface UseUpdateAggregateOptions {
    * `suppress_response`. See `AggregateMutationParams`.
    */
   params?: AggregateMutationParams;
+  /**
+   * Restrict the write to these source ids on a `MultiplexClient`. Ignored
+   * for a plain `DooverClient` or `LocalAgentClient`. Also scopes the
+   * react-query cache invalidation to the matching source-dimensioned key.
+   */
+  sources?: string[];
 }
 
 /**
@@ -31,6 +37,7 @@ export function useUpdateAggregate<TData extends object = object>(
   const queryClient = useQueryClient();
   const replace = options?.replace ?? false;
   const params = options?.params;
+  const sources = options?.sources;
 
   return useMutation({
     mutationFn: (data: TData) => {
@@ -38,15 +45,22 @@ export function useUpdateAggregate<TData extends object = object>(
         return Promise.reject(new Error("Identifier must include agentId and channelName"));
       }
       const id = { agentId: identifier.agentId, channelName: identifier.channelName };
-      return (replace
-        ? client.aggregates.putAggregate(id, data as Record<string, unknown>, params)
-        : client.aggregates.patchAggregate(id, data as Record<string, unknown>, params)) as Promise<
-        Aggregate<TData>
-      >;
+      const body = data as Record<string, unknown>;
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      if (replace) {
+        return (sourcesArg
+          ? (client.aggregates.putAggregate as unknown as (...a: unknown[]) => Promise<Aggregate<TData>>)(id, body, params, sourcesArg)
+          : client.aggregates.putAggregate(id, body, params)) as Promise<Aggregate<TData>>;
+      }
+      return (sourcesArg
+        ? (client.aggregates.patchAggregate as unknown as (...a: unknown[]) => Promise<Aggregate<TData>>)(id, body, params, sourcesArg)
+        : client.aggregates.patchAggregate(id, body, params)) as Promise<Aggregate<TData>>;
     },
     onSuccess: (aggregate) => {
       queryClient.setQueryData(
-        channelAggregateQueryKey(identifier.agentId, identifier.channelName),
+        channelAggregateQueryKey(identifier.agentId, identifier.channelName, sources),
         aggregate,
       );
     },
