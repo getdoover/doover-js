@@ -1,6 +1,10 @@
 export { DooverProvider, useDooverClient } from "./context";
 export type { DooverProviderProps } from "./context";
 
+export type { DataClientStatus, DataClientConnectionState, AgentScope } from "../client/data-client";
+
+export { useClientStatus } from "./useClientStatus";
+
 export { useConnectionState } from "./useConnectionState";
 export type { ConnectionState, ConnectionStatus } from "./useConnectionState";
 
