@@ -64,6 +64,9 @@ export class DooverClient implements DataClient {
   /** Underlying concrete gateway (the public `gateway` is the same object,
    *  typed as the structural `GatewayClientLike`). */
   private readonly gatewayImpl: GatewayClient;
+  /** Underlying concrete RPC dispatcher (the public `rpc` is the same object,
+   *  typed as the structural `RpcDispatcherLike`). */
+  private readonly rpcImpl: RpcDispatcher;
 
   constructor(config: DooverClientConfig) {
     this.auth = buildAuth({
@@ -115,12 +118,13 @@ export class DooverClient implements DataClient {
 
     // RpcDispatcher needs the concrete MessagesApi (it calls postMessage internally);
     // give it an *unwrapped* one so stamping happens once at the public boundary.
-    this.rpc = new RpcDispatcher(this.gatewayImpl, new MessagesApi(this.rest));
+    this.rpcImpl = new RpcDispatcher(this.gatewayImpl, new MessagesApi(this.rest));
+    this.rpc = this.rpcImpl;
 
     this.stats = new DooverStatsCollector();
     this.rest.setStats(this.stats);
     this.gatewayImpl.setStats(this.stats);
-    (this.rpc as RpcDispatcher).setStats(this.stats);
+    this.rpcImpl.setStats(this.stats);
 
     this.statusTracker = new ClientStatusTracker(
       this.identity.id,

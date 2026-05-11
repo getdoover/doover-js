@@ -64,4 +64,33 @@ describe("ClientStatusTracker", () => {
     emit("ready", { session_id: "s2" });
     expect(seen.length).to.equal(len); // unsubscribed
   });
+
+  it("recovers from error state after reconnect", () => {
+    const { gw, emit, setConnected, setSession } = makeGatewayStub();
+    const tracker = new ClientStatusTracker("cloud", gw, () => "all");
+
+    // Drive to error state first
+    emit("open");
+    setConnected(true);
+    setSession({ session_id: "s1" });
+    emit("ready", { session_id: "s1" });
+    setConnected(false);
+    emit("close", { code: 1006 });
+    emit("wssError", { message: "connection lost" });
+    expect(tracker.getStatus().state).to.equal("error");
+    expect(tracker.getStatus().lastError).to.equal("connection lost");
+
+    // Reconnect: open clears error, transitions to connecting
+    emit("open");
+    expect(tracker.getStatus().state).to.equal("connecting");
+    expect(tracker.getStatus().lastError).to.be.undefined;
+
+    // Session established: transitions to connected with new session
+    setConnected(true);
+    setSession({ session_id: "s2" });
+    emit("ready", { session_id: "s2" });
+    const status = tracker.getStatus();
+    expect(status.state).to.equal("connected");
+    expect(status.session).to.deep.equal({ id: "s2" });
+  });
 });

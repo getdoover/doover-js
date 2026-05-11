@@ -3,18 +3,18 @@ import type { DooverStatsCollector } from "../client/stats";
 import type { DooverClientConfig } from "../http/rest-client";
 import { DooverGatewayError } from "../http/errors";
 import { addTimestampToMessage } from "../utils/snowflake";
-
-export type GatewayProvenanceHook = <T>(
-  value: T,
-  ctx: { event: string; sessionId?: string },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-) => any;
 import type {
   GatewayInboundMessage,
   GatewayListenerMap,
   WebSocketSession,
 } from "./types";
 import type { Aggregate, ChannelRef, JSONValue, MessageStructure } from "../types/common";
+
+export type GatewayProvenanceHook = <T>(
+  value: T,
+  ctx: { event: string; sessionId?: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+) => any;
 
 type ListenerSet<K extends keyof GatewayListenerMap> = Set<GatewayListenerMap[K]>;
 
