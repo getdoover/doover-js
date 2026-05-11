@@ -3,6 +3,12 @@ import type { DooverStatsCollector } from "../client/stats";
 import type { DooverClientConfig } from "../http/rest-client";
 import { DooverGatewayError } from "../http/errors";
 import { addTimestampToMessage } from "../utils/snowflake";
+
+export type GatewayProvenanceHook = <T>(
+  value: T,
+  ctx: { event: string; sessionId?: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+) => any;
 import type {
   GatewayInboundMessage,
   GatewayListenerMap,
@@ -55,6 +61,7 @@ export class GatewayClient {
   private channelRegistry = new Map<string, ChannelRegistryEntry>();
   private readonly auth: DooverAuth | null;
   private stats: DooverStatsCollector | null = null;
+  private provenanceHook: GatewayProvenanceHook | null = null;
 
   constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
     this.auth = auth ?? null;
@@ -64,6 +71,21 @@ export class GatewayClient {
   /** Attach a stats collector. Call with `null` to detach. */
   setStats(stats: DooverStatsCollector | null): void {
     this.stats = stats;
+  }
+
+  /** Optional hook that stamps `__source` provenance onto emitted gateway
+   *  payloads. `DooverClient` / `LocalAgentClient` set this; standalone
+   *  `GatewayClient` users leave it null and get raw payloads. */
+  setProvenanceHook(hook: GatewayProvenanceHook | null): void {
+    this.provenanceHook = hook;
+  }
+
+  private stamp<T>(value: T, event: string): T {
+    if (!this.provenanceHook) return value;
+    return this.provenanceHook(value, {
+      event,
+      ...(this.session?.session_id ? { sessionId: this.session.session_id } : {}),
+    });
   }
 
   async connect(): Promise<void> {
@@ -329,26 +351,26 @@ export class GatewayClient {
         this.resubscribeAll();
         break;
       case "ChannelSync":
-        this.emit("channelSync", message.d);
+        this.emit("channelSync", this.stamp(message.d, "channelSync"));
         break;
       case "MessageCreate":
-        this.emit("messageCreate", addTimestampToMessage(message.d));
+        this.emit("messageCreate", this.stamp(addTimestampToMessage(message.d), "messageCreate"));
         break;
       case "MessageUpdate":
         this.emit(
           "messageUpdate",
-          addTimestampToMessage(message.d.message),
+          this.stamp(addTimestampToMessage(message.d.message), "messageUpdate"),
           message.d.request_data,
         );
         break;
       case "AggregateUpdate":
-        this.emit("aggregateUpdate", message.d);
+        this.emit("aggregateUpdate", this.stamp(message.d, "aggregateUpdate"));
         break;
       case "AlarmTrigger":
-        this.emit("alarmTrigger", message.d);
+        this.emit("alarmTrigger", this.stamp(message.d, "alarmTrigger"));
         break;
       case "OneShotMessage":
-        this.emit("oneShotMessage", message.d);
+        this.emit("oneShotMessage", this.stamp(message.d, "oneShotMessage"));
         break;
       case "ChannelSubscription":
         this.emit("channelSubscription", message.d);

@@ -93,13 +93,7 @@ export class DooverClient implements DataClient {
 
     this.rest = new RestClient(config, this.auth);
     this.gatewayImpl = new GatewayClient(config, this.auth);
-    // setProvenanceHook is added in Task 10; it is stubbed here so Task 8
-    // compiles. The real implementation lands when gateway-client.ts is updated.
-    if (typeof (this.gatewayImpl as unknown as { setProvenanceHook?: unknown }).setProvenanceHook === "function") {
-      (this.gatewayImpl as unknown as { setProvenanceHook: (hook: (value: unknown, ctx: { event: string; sessionId?: string }) => unknown) => void }).setProvenanceHook(
-        (value, ctx) => stamper.stampGatewayEvent(value, ctx),
-      );
-    }
+    this.gatewayImpl.setProvenanceHook((value, ctx) => stamper.stampGatewayEvent(value, ctx));
     this.gateway = this.gatewayImpl;
     this.viewer = new DooverDataProvider({
       rest: this.rest,
