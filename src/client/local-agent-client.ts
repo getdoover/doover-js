@@ -24,7 +24,7 @@ import type {
   UsersApiLike,
 } from "./data-client";
 import { UnsupportedCapabilityError } from "./errors";
-import { ProvenanceStamper, wrapSubclient, type ClientIdentity } from "./provenance";
+import { ProvenanceStamper, wrapSubclient, type ClientIdentity, type WrappedSubclient } from "./provenance";
 import { ClientStatusTracker } from "./status-tracker";
 
 export interface LocalAgentClientConfig {
@@ -169,19 +169,23 @@ export class LocalAgentClient implements DataClient {
     if (this.resolvedScope) return Promise.resolve({ mode: "list", agentIds: this.resolvedScope });
     if (this.scopeResolving) return this.scopeResolving;
     this.scopeResolving = (async () => {
+      let scope: AgentScope = { mode: "list", agentIds: [] };
       try {
         const res = await this.agents.listAgents();
         const rawAgents = res?.agents ?? [];
         const first = rawAgents[0];
         const id = first?.id;
         this.resolvedScope = id ? [String(id)] : [];
+        scope = { mode: "list", agentIds: this.resolvedScope };
       } catch {
-        this.resolvedScope = [];
+        // Don't cache on error — leave resolvedScope null so the next caller
+        // retries. Storing [] would permanently pin scope to no agents after a
+        // transient first-call failure (network unreachable, 503, etc.).
       } finally {
         this.scopeResolving = null;
         this.statusTracker.notifyScopeChanged();
       }
-      return { mode: "list", agentIds: this.resolvedScope! };
+      return scope;
     })();
     return this.scopeResolving;
   }
@@ -200,9 +204,17 @@ export class LocalAgentClient implements DataClient {
   /**
    * Wraps a real (provenance-wrapped) subclient so only `allowed` method names
    * pass through; any other method call throws `UnsupportedCapabilityError`.
+   *
+   * Typing `real` as `WrappedSubclient<T>` and `allowed` as
+   * `ReadonlyArray<keyof WrappedSubclient<T> & string>` ensures the compiler
+   * catches typos in the allowed-method list at the call site.
    */
-  private gatedSubclient<T extends object>(name: string, real: object, allowed: string[]): T {
-    const allowSet = new Set(allowed);
+  private gatedSubclient<T extends object>(
+    name: string,
+    real: WrappedSubclient<T>,
+    allowed: ReadonlyArray<keyof WrappedSubclient<T> & string>,
+  ): T {
+    const allowSet = new Set<string>(allowed);
     const clientId = this.identity.id;
     return new Proxy(real, {
       get(target, prop, receiver) {

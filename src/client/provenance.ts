@@ -24,7 +24,7 @@ type Stamped<T> = T extends (infer E)[]
     : T;
 
 /** Map a subclient type so that async methods return Stamped results. */
-type WrappedSubclient<T> = {
+export type WrappedSubclient<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
     ? (...args: A) => Promise<Stamped<R>>
     : T[K];

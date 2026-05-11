@@ -125,4 +125,38 @@ describe("LocalAgentClient", () => {
     await c.getAgentScope(); // cached
     expect(agentCalls).to.equal(1);
   });
+
+  it("reconnect (Ready frame) invalidates the scope cache and re-fetches the agent id", async () => {
+    let agentCalls = 0;
+    const fetchMock = createFetchMock((url) => {
+      if (url.includes("/agents")) { agentCalls += 1; return createJsonResponse({ agents: [{ id: "dev7", name: "Device 7" }] }); }
+      return createJsonResponse({});
+    });
+    const c = makeLocal({ fetchImpl: fetchMock as typeof fetch });
+
+    // 1. Initial resolve — agentCalls becomes 1, scope is cached.
+    const scope1 = await c.getAgentScope();
+    expect(scope1).to.deep.equal({ mode: "list", agentIds: ["dev7"] });
+    expect(agentCalls).to.equal(1);
+
+    // 2. Connect the gateway, open the socket, and send a Ready frame — this
+    //    should null the cache and kick off a background re-fetch.
+    await c.gateway.connect();
+    const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    ws.open();
+    ws.receive({ op: 0, t: "Hello", d: {} });
+    ws.receive({ op: 0, t: "Ready", d: { session_id: "s2", session_token: "t2", subscriptions: [] } });
+
+    // 3. The "ready" handler fires synchronously, nulling resolvedScope and
+    //    firing off an async re-fetch.  Flush the microtask queue so the async
+    //    listAgents() call has time to complete before we assert.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    // 4. Re-fetch should have run: agentCalls === 2 and scope is still [dev7].
+    expect(agentCalls).to.equal(2);
+    const scope2 = await c.getAgentScope(); // now served from refreshed cache
+    expect(scope2).to.deep.equal({ mode: "list", agentIds: ["dev7"] });
+    expect(agentCalls).to.equal(2); // no third fetch — cache hit
+  });
 });
