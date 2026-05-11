@@ -39,4 +39,10 @@ describe("public exports (Phase 1–3)", () => {
     void _status;
     expect(true).to.equal(true); // keep mocha happy
   });
+
+  it("exports the full Phase-1..4 surface", () => {
+    for (const name of ["ALL_CAPABILITIES", "UnsupportedCapabilityError", "AmbiguousWriteError", "LocalAgentClient", "MultiplexClient", "DooverClient"]) {
+      expect((doover as Record<string, unknown>)[name], name).to.exist;
+    }
+  });
 });
