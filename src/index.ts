@@ -30,6 +30,34 @@ export { DooverRpcError } from "./rpc/errors";
 export type { ChannelHandlers } from "./gateway/gateway-client";
 export type { RpcStatsSnapshot } from "./client/stats";
 
+export { ALL_CAPABILITIES } from "./client/capabilities";
+export type { Capability } from "./client/capabilities";
+export { UnsupportedCapabilityError, AmbiguousWriteError } from "./client/errors";
+export type {
+  DataClient,
+  AgentScope,
+  DataClientStatus,
+  DataClientConnectionState,
+  AgentsApiLike,
+  AggregatesApiLike,
+  AlarmsApiLike,
+  ChannelsApiLike,
+  ConnectionsApiLike,
+  MessagesApiLike,
+  NotificationsApiLike,
+  PermissionsApiLike,
+  ProcessorsApiLike,
+  TurnApiLike,
+  UsersApiLike,
+  GatewayClientLike,
+  RpcDispatcherLike,
+} from "./client/data-client";
+export type {
+  SourceProvenance,
+  SourceProvenanceViaRest,
+  SourceProvenanceViaGateway,
+} from "./types/provenance";
+
 export { DooverAuth } from "./auth/doover-auth";
 export { CookieAuth } from "./auth/cookie-auth";
 export { DooverTokenAuth } from "./auth/doover-token-auth";
