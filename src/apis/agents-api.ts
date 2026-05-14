@@ -18,6 +18,12 @@ export interface MultiAgentMessagesParams {
 
 export interface MultiAgentAggregatesParams {
   agent_id: string[];
+  /**
+   * Project the response to only the named top-level keys of each aggregate's
+   * `data`. Useful for large aggregates (e.g. `tag_values`) when the caller
+   * only needs a subset of the tag tree.
+   */
+  field_name?: string[];
 }
 
 export class AgentsApi {

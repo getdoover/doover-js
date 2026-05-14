@@ -20,6 +20,6 @@ export function addTimestampToMessage<T extends { id: string }>(
   const extracted = extractSnowflakeId(message.id);
   return {
     ...message,
-    timestamp: extracted.timestamp / 1000,
+    timestamp: extracted.timestamp,
   };
 }

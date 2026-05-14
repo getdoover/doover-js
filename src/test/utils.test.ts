@@ -18,7 +18,7 @@ describe("snowflake utilities", () => {
     expect(id).to.match(/^\d+$/);
   });
 
-  it("adds a second-based timestamp to messages", () => {
+  it("adds an epoch-ms timestamp to messages", () => {
     const date = new Date("2026-01-02T03:04:05.000Z");
     const id = generateSnowflakeIdAtTime(date);
 
@@ -30,7 +30,7 @@ describe("snowflake utilities", () => {
       attachments: [],
     });
 
-    expect(message.timestamp).to.equal(date.getTime() / 1000);
+    expect(message.timestamp).to.equal(date.getTime());
   });
 });
 

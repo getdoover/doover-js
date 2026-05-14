@@ -12,19 +12,31 @@ import { channelAggregateQueryKey } from "./useChannelAggregate";
 export function multiAgentAggregatesQueryKey(
   channelName: string,
   agentIds: string[],
+  fields?: readonly string[],
 ) {
-  return [
+  const base = [
     "doover",
     "channel",
     channelName,
     "aggregates",
     [...agentIds].sort().join(","),
   ] as const;
+  return fields && fields.length > 0
+    ? ([...base, { fields: [...fields].sort() }] as const)
+    : base;
 }
 
 export interface UseMultiAgentAggregatesOptions {
   /** If false, skip per-agent live subscriptions. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Project the response to only the named top-level keys of each aggregate's
+   * `data`. Forwarded as `field_name`. Useful for large aggregates (e.g.
+   * `tag_values`) when you only need a handful of subtrees. Live updates that
+   * arrive via the per-agent subscription are *not* projected — the gateway
+   * pushes whatever it has, so consumers should still tolerate the full shape.
+   */
+  fields?: string[];
 }
 
 export interface UseMultiAgentAggregatesResult<TData> {
@@ -48,7 +60,8 @@ export function useMultiAgentAggregates<
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const liveUpdates = options?.liveUpdates ?? true;
-  const key = multiAgentAggregatesQueryKey(channelName, agentIds);
+  const fields = options?.fields;
+  const key = multiAgentAggregatesQueryKey(channelName, agentIds, fields);
 
   const query = useQuery<{ results: AgentAggregate<TData>[]; count: number }>({
     queryKey: key,
@@ -57,7 +70,10 @@ export function useMultiAgentAggregates<
     queryFn: async () => {
       const response = await client.agents.getMultiAgentAggregates(
         channelName,
-        { agent_id: agentIds },
+        {
+          agent_id: agentIds,
+          ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+        },
       );
       // Seed the per-agent `channelAggregateQueryKey` cache so that
       // sibling `useChannelAggregate(id, channelName)` calls for any
