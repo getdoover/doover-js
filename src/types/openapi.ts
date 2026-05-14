@@ -36,16 +36,28 @@ export interface BatchMessagesResponse {
   results: MessageStructure[];
   count: number;
   /**
-   * Snowflake cursor for the next sub-page — non-null means at least one
-   * agent returned a full `agent_message_limit` worth and may have more
-   * older messages within the window. Re-request with `before=<next>`.
+   * Per-agent resume cursors. Any agent whose fetch hit the per-agent
+   * limit before draining the window maps to the oldest snowflake we
+   * did return for it. Pass these back as `agent_before` (parallel to
+   * `agent_id`) on the next call to continue paginating each agent
+   * independently. Empty (or missing, on older servers) when the
+   * window is fully drained.
+   *
+   * This is the canonical pagination signal — `next` and
+   * `at_limit_agent_ids` are kept populated for back-compat with
+   * pre-`next_cursors` clients.
+   */
+  next_cursors?: Record<string, string>;
+  /**
+   * Legacy single-cursor pagination signal — the most-recent (highest
+   * snowflake id) oldest-cursor across at-limit agents. Clients
+   * paginating with a single global `before` should pass this back;
+   * prefer `next_cursors` + `agent_before` for new code.
    */
   next?: string | null;
   /**
-   * Agent ids that returned a full `agent_message_limit` worth in this
-   * response — those that may have more older messages within the window.
-   * Pass these (and only these) as `agent_id` on the next sub-page so the
-   * server doesn't repeat DDB lookups for already-exhausted agents.
+   * Legacy: agent ids with possibly-more older messages — equivalent to
+   * `Object.keys(next_cursors)`. Prefer `next_cursors` for new code.
    */
   at_limit_agent_ids?: string[];
 }

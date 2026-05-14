@@ -9,6 +9,15 @@ import type { RestClient } from "../http/rest-client";
 
 export interface MultiAgentMessagesParams {
   agent_id: string[];
+  /**
+   * Per-agent `before` cursors, parallel to `agent_id`. When set, must
+   * be the same length as `agent_id`; each agent then uses its own
+   * cursor as the upper bound instead of the global `before`. This is
+   * how paginating clients should resume from a previous response's
+   * `next_cursors` map — each agent paginates independently with no
+   * inter-agent "watermark retain".
+   */
+  agent_before?: string[];
   before?: string;
   after?: string;
   limit?: number;
