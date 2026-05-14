@@ -35,7 +35,19 @@ export type {
 export interface BatchMessagesResponse {
   results: MessageStructure[];
   count: number;
-  next?: string;
+  /**
+   * Snowflake cursor for the next sub-page — non-null means at least one
+   * agent returned a full `agent_message_limit` worth and may have more
+   * older messages within the window. Re-request with `before=<next>`.
+   */
+  next?: string | null;
+  /**
+   * Agent ids that returned a full `agent_message_limit` worth in this
+   * response — those that may have more older messages within the window.
+   * Pass these (and only these) as `agent_id` on the next sub-page so the
+   * server doesn't repeat DDB lookups for already-exhausted agents.
+   */
+  at_limit_agent_ids?: string[];
 }
 
 export interface BatchAggregatesResponse {
