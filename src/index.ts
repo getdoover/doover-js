@@ -47,6 +47,7 @@ export { DooverDataProvider } from "./viewer/doover-data-provider";
 export { getIdentifierFromPath } from "./viewer/path-parsing";
 
 export type * from "./types/common";
+export type * from "./types/connection";
 export type * from "./types/openapi";
 export type * from "./types/viewer";
 
