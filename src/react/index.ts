@@ -89,6 +89,13 @@ export type {
   UseMultiAgentChannelMessagesResult,
 } from "./useMultiAgentChannelMessages";
 
+export { useDeviceMap } from "./useDeviceMap";
+export type {
+  DeviceMapEntry,
+  UseDeviceMapOptions,
+  UseDeviceMapResult,
+} from "./useDeviceMap";
+
 export { useTurnCredentials } from "./useTurnCredentials";
 
 export {

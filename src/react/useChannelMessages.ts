@@ -14,10 +14,21 @@ import { useChannelSubscription } from "./useChannelSubscription";
 export function channelMessagesQueryKey(
   agentId: string | undefined,
   channelName: string | undefined,
+  fields?: readonly string[],
   sources?: string[],
 ) {
+  // Source-dimension the key (multiplex source subsets cache independently);
+  // "*" means "all/unspecified" for a plain DooverClient/LocalAgentClient.
   const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
-  return ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
+  const key = ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
+  if (!fields || fields.length === 0) return key;
+  // A `field_name`-filtered request returns a different message stream than
+  // the unfiltered (or differently-filtered) one, so it must live under its
+  // own cache entry — otherwise one filter's pagination cursor leaks into
+  // another's `getNextPageParam`, and the "next page" fetch ends up anchored
+  // to an unrelated (often much older) message id. Sort so call-site argument
+  // order doesn't fragment the cache.
+  return [...key, { fields: [...fields].sort() }] as const;
 }
 
 export interface UseChannelMessagesOptions {
@@ -89,10 +100,23 @@ export function useChannelMessages<TData = unknown>(
   const after = options?.after;
   const autoPaginate = options?.autoPaginate ?? false;
   const sources = options?.sources;
-  const key = channelMessagesQueryKey(agentId, channelName, sources);
+  const key = channelMessagesQueryKey(agentId, channelName, fields, sources);
 
   const onMessage = useCallback(
     (message: MessageStructure) => {
+      // This cache entry is scoped to `fields`; the gateway delivers every
+      // message on the channel, so drop live pushes whose payload doesn't
+      // carry one of those fields rather than letting them pollute it.
+      if (fields && fields.length > 0) {
+        const data = message.data as unknown;
+        if (
+          !data ||
+          typeof data !== "object" ||
+          !fields.some((f) => f in data)
+        ) {
+          return;
+        }
+      }
       queryClient.setQueryData<InfiniteData<Page<TData>>>(key, (current) => {
         if (!current) return current;
         const typed = message as MessageStructure<TData>;
@@ -105,7 +129,7 @@ export function useChannelMessages<TData = unknown>(
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName, sources?.join(",")],
+    [queryClient, agentId, channelName, fields?.join(","), sources?.join(",")],
   );
 
   useChannelSubscription(liveUpdates ? identifier : undefined, { onMessage });

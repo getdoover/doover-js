@@ -12,10 +12,11 @@ import { channelAggregateQueryKey } from "./useChannelAggregate";
 export function multiAgentAggregatesQueryKey(
   channelName: string,
   agentIds: string[],
+  fields?: readonly string[],
   sources?: string[],
 ) {
   const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
-  return [
+  const base = [
     "doover",
     "channel",
     channelName,
@@ -24,11 +25,22 @@ export function multiAgentAggregatesQueryKey(
     "src",
     sourceDim,
   ] as const;
+  return fields && fields.length > 0
+    ? ([...base, { fields: [...fields].sort() }] as const)
+    : base;
 }
 
 export interface UseMultiAgentAggregatesOptions {
   /** If false, skip per-agent live subscriptions. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Project the response to only the named top-level keys of each aggregate's
+   * `data`. Forwarded as `field_name`. Useful for large aggregates (e.g.
+   * `tag_values`) when you only need a handful of subtrees. Live updates that
+   * arrive via the per-agent subscription are *not* projected — the gateway
+   * pushes whatever it has, so consumers should still tolerate the full shape.
+   */
+  fields?: string[];
   /**
    * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
    * `DooverClient` or `LocalAgentClient`. When set, the query key is
@@ -60,19 +72,24 @@ export function useMultiAgentAggregates<
   const queryClient = useQueryClient();
   const liveUpdates = options?.liveUpdates ?? true;
   const sources = options?.sources;
-  const key = multiAgentAggregatesQueryKey(channelName, agentIds, sources);
+  const fields = options?.fields;
+  const key = multiAgentAggregatesQueryKey(channelName, agentIds, fields, sources);
 
   const query = useQuery<{ results: AgentAggregate<TData>[]; count: number }>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
     queryFn: async () => {
+      const params = {
+        agent_id: agentIds,
+        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+      };
       // Pass `{ sources }` as a trailing bag only when set — cast through
       // `never` since the TypeScript overloads don't declare it.
       const sourcesArg = sources ? { sources } : undefined;
       const response = await (sourcesArg
-        ? (client.agents.getMultiAgentAggregates as unknown as (...a: unknown[]) => Promise<{ results: AgentAggregate<TData>[]; count: number }>)(channelName, { agent_id: agentIds }, sourcesArg)
-        : client.agents.getMultiAgentAggregates(channelName, { agent_id: agentIds }));
+        ? (client.agents.getMultiAgentAggregates as unknown as (...a: unknown[]) => Promise<{ results: AgentAggregate<TData>[]; count: number }>)(channelName, params, sourcesArg)
+        : client.agents.getMultiAgentAggregates(channelName, params));
       // Seed the per-agent `channelAggregateQueryKey` cache so that
       // sibling `useChannelAggregate(id, channelName)` calls for any
       // of these agents get an instant cache hit rather than issuing
