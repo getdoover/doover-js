@@ -59,10 +59,11 @@ export interface Alarm {
   state: AlarmState;
   expiry_mins: number | null;
   entered_state_ts: number;
+  alarm_pending_ms: number | null;
 }
 
 export type AlarmOperator = "eq" | "ge" | "gt" | "le" | "lt";
-export type AlarmState = "NoData" | "OK" | "Alarm";
+export type AlarmState = "NoData" | "OK" | "Alarm" | "AlarmPending";
 
 export interface ConnectionSubscription {
   channel: ChannelRef;

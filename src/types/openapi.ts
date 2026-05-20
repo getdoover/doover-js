@@ -152,6 +152,7 @@ export interface CreateAlarmRequest {
   operator: Alarm["operator"];
   value: unknown;
   expiry_mins?: number | null;
+  alarm_pending_ms?: number | null;
 }
 
 export interface PatchAlarmRequest extends Partial<CreateAlarmRequest> {}
