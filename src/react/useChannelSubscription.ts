@@ -16,6 +16,12 @@ export interface ChannelSubscriptionHandlers {
     request_data?: JSONValue,
   ) => void;
   onAggregate?: (aggregate: Aggregate) => void;
+  /**
+   * Reserved for future use. The composite gateway already routes by
+   * `channel.agent_id`, so this option is a no-op in v1. Pass it for
+   * forward-compatibility; it has no effect on the subscription.
+   */
+  sources?: string[];
 }
 
 /**
@@ -36,36 +42,14 @@ export function useChannelSubscription(
 
   useEffect(() => {
     if (!identifier?.agentId || !identifier?.channelName) return;
-
-    const messageCallback = (_id: ChannelIdentifier, message: MessageStructure) => {
-      handlersRef.current.onMessage?.(message);
-    };
-    const aggregateCallback = (_id: ChannelIdentifier, aggregate: Aggregate) => {
-      handlersRef.current.onAggregate?.(aggregate);
-    };
-    const messageUpdateCallback = (
-      _id: ChannelIdentifier,
-      message: MessageStructure,
-      request_data?: JSONValue,
-    ) => {
-      handlersRef.current.onMessageUpdate?.(message, request_data);
-    };
-
-    void client.viewer.subscribeToChannel(
-      identifier,
-      messageCallback,
-      aggregateCallback,
-      messageUpdateCallback,
-    );
-
-    return () => {
-      client.viewer
-        .unsubscribeFromChannel(identifier, messageCallback)
-        .catch(() => {
-          // Already unsubscribed — race between strict-mode double-effect
-          // and async subscribe is harmless.
-        });
-    };
+    const channel = { agent_id: identifier.agentId, name: identifier.channelName };
+    const off = client.gateway.subscribeToChannel(channel, {
+      onMessage: (msg) => handlersRef.current.onMessage?.(msg),
+      onMessageUpdate: (msg, rd) => handlersRef.current.onMessageUpdate?.(msg, rd),
+      onAggregate: (agg) => handlersRef.current.onAggregate?.(agg),
+    });
+    void client.gateway.connect();
+    return () => off();
     // Identifier fields are the real deps; we intentionally leave `handlers`
     // out because it's read through handlersRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps

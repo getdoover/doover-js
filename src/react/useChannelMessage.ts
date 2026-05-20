@@ -14,7 +14,9 @@ export function channelMessageQueryKey(
   agentId: string | undefined,
   channelName: string | undefined,
   messageId: string | undefined,
+  sources?: string[],
 ) {
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
   return [
     "doover",
     "agent",
@@ -23,12 +25,21 @@ export function channelMessageQueryKey(
     channelName,
     "message",
     messageId,
+    "src",
+    sourceDim,
   ] as const;
 }
 
 export interface UseChannelMessageOptions {
   /** If false, skip subscribing for live message-update events. Defaults true. */
   liveUpdates?: boolean;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 /**
@@ -71,16 +82,17 @@ export function useChannelMessage<TData = JSONValue>(
   const queryClient = useQueryClient();
   const { agentId, channelName } = identifier;
   const liveUpdates = options?.liveUpdates ?? true;
-  const key = channelMessageQueryKey(agentId, channelName, messageId);
+  const sources = options?.sources;
+  const key = channelMessageQueryKey(agentId, channelName, messageId, sources);
 
   const onMessageUpdate = useCallback(
     (message: MessageStructure) => {
       if (message.id !== messageId) return;
       queryClient.setQueryData(key, message as MessageStructure<TData>);
     },
-    // The key array is structurally stable per (agentId, channelName, messageId).
+    // The key array is structurally stable per (agentId, channelName, messageId, sourceDim).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName, messageId],
+    [queryClient, agentId, channelName, messageId, sources?.join(",")],
   );
 
   // Cover the case where the caller has the id before the create event has
@@ -91,7 +103,7 @@ export function useChannelMessage<TData = JSONValue>(
       queryClient.setQueryData(key, message as MessageStructure<TData>);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName, messageId],
+    [queryClient, agentId, channelName, messageId, sources?.join(",")],
   );
 
   useChannelSubscription(
@@ -103,12 +115,18 @@ export function useChannelMessage<TData = JSONValue>(
     queryKey: key,
     enabled: !!agentId && !!channelName && !!messageId,
     staleTime: Infinity,
-    queryFn: () =>
-      client.messages.getMessage(
-        agentId as string,
-        channelName as string,
-        messageId as string,
-      ) as Promise<MessageStructure<TData> | undefined>,
+    queryFn: () => {
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      return (sourcesArg
+        ? (client.messages.getMessage as unknown as (...a: unknown[]) => Promise<MessageStructure<TData>>)(
+            agentId as string, channelName as string, messageId as string, sourcesArg,
+          )
+        : client.messages.getMessage(
+            agentId as string, channelName as string, messageId as string,
+          )) as Promise<MessageStructure<TData> | undefined>;
+    },
   });
 
   const message = query.data;

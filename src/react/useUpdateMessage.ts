@@ -17,7 +17,13 @@ export interface UpdateMessageCallOptions {
   params?: MessageMutationParams;
 }
 
-export interface UseUpdateMessageOptions extends UpdateMessageCallOptions {}
+export interface UseUpdateMessageOptions extends UpdateMessageCallOptions {
+  /**
+   * Restrict the write to these source ids on a `MultiplexClient`. Ignored
+   * for a plain `DooverClient` or `LocalAgentClient`.
+   */
+  sources?: string[];
+}
 
 export interface UpdateMessageVariables<TBody extends MessageBody = MessageBody> {
   messageId: string;
@@ -42,6 +48,7 @@ export function useUpdateMessage<TBody extends MessageBody = MessageBody>(
   const client = useDooverClient();
   const defaultReplace = options?.replace ?? false;
   const defaultParams = options?.params;
+  const sources = options?.sources;
 
   return useMutation({
     mutationFn: ({
@@ -59,20 +66,24 @@ export function useUpdateMessage<TBody extends MessageBody = MessageBody>(
         call?.params || defaultParams
           ? { ...defaultParams, ...call?.params }
           : undefined;
-      return replace
-        ? client.messages.putMessage(
-            identifier.agentId,
-            identifier.channelName,
-            messageId,
-            body,
-            params,
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      if (replace) {
+        return sourcesArg
+          ? (client.messages.putMessage as unknown as (...a: unknown[]) => Promise<unknown>)(
+              identifier.agentId, identifier.channelName, messageId, body, params, sourcesArg,
+            )
+          : client.messages.putMessage(
+              identifier.agentId, identifier.channelName, messageId, body, params,
+            );
+      }
+      return sourcesArg
+        ? (client.messages.patchMessage as unknown as (...a: unknown[]) => Promise<unknown>)(
+            identifier.agentId, identifier.channelName, messageId, body, params, sourcesArg,
           )
         : client.messages.patchMessage(
-            identifier.agentId,
-            identifier.channelName,
-            messageId,
-            body,
-            params,
+            identifier.agentId, identifier.channelName, messageId, body, params,
           );
     },
   });

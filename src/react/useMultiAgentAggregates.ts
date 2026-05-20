@@ -13,13 +13,17 @@ export function multiAgentAggregatesQueryKey(
   channelName: string,
   agentIds: string[],
   fields?: readonly string[],
+  sources?: string[],
 ) {
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
   const base = [
     "doover",
     "channel",
     channelName,
     "aggregates",
     [...agentIds].sort().join(","),
+    "src",
+    sourceDim,
   ] as const;
   return fields && fields.length > 0
     ? ([...base, { fields: [...fields].sort() }] as const)
@@ -37,6 +41,13 @@ export interface UseMultiAgentAggregatesOptions {
    * pushes whatever it has, so consumers should still tolerate the full shape.
    */
   fields?: string[];
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 export interface UseMultiAgentAggregatesResult<TData> {
@@ -60,21 +71,25 @@ export function useMultiAgentAggregates<
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const liveUpdates = options?.liveUpdates ?? true;
+  const sources = options?.sources;
   const fields = options?.fields;
-  const key = multiAgentAggregatesQueryKey(channelName, agentIds, fields);
+  const key = multiAgentAggregatesQueryKey(channelName, agentIds, fields, sources);
 
   const query = useQuery<{ results: AgentAggregate<TData>[]; count: number }>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
     queryFn: async () => {
-      const response = await client.agents.getMultiAgentAggregates(
-        channelName,
-        {
-          agent_id: agentIds,
-          ...(fields && fields.length > 0 ? { field_name: fields } : {}),
-        },
-      );
+      const params = {
+        agent_id: agentIds,
+        ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+      };
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      const response = await (sourcesArg
+        ? (client.agents.getMultiAgentAggregates as unknown as (...a: unknown[]) => Promise<{ results: AgentAggregate<TData>[]; count: number }>)(channelName, params, sourcesArg)
+        : client.agents.getMultiAgentAggregates(channelName, params));
       // Seed the per-agent `channelAggregateQueryKey` cache so that
       // sibling `useChannelAggregate(id, channelName)` calls for any
       // of these agents get an instant cache hit rather than issuing
@@ -82,7 +97,7 @@ export function useMultiAgentAggregates<
       for (const result of response.results) {
         const { agent_id, ...aggregate } = result;
         queryClient.setQueryData(
-          channelAggregateQueryKey(agent_id, channelName),
+          channelAggregateQueryKey(agent_id, channelName, sources),
           aggregate as Aggregate<TData>,
         );
       }
@@ -114,40 +129,26 @@ export function useMultiAgentAggregates<
       // Mirror live updates into the per-agent cache so sibling
       // `useChannelAggregate` consumers see them too.
       queryClient.setQueryData(
-        channelAggregateQueryKey(agentId, channelName),
+        channelAggregateQueryKey(agentId, channelName, sources),
         aggregate,
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, channelName, agentIds.join(",")],
+    [queryClient, channelName, agentIds.join(","), sources?.join(",")],
   );
 
   useEffect(() => {
     if (!liveUpdates || agentIds.length === 0) return;
-    const noopMessage = () => {};
-    const subscriptions = agentIds.map((agentId) => {
-      const identifier = { agentId, channelName };
-      const messageCallback = noopMessage;
-      const aggregateCallback = (
-        _id: { agentId?: string },
-        aggregate: Aggregate,
-      ) => {
-        patchAgentAggregate(agentId, aggregate as Aggregate<TData>);
-      };
-      void client.viewer.subscribeToChannel(
-        identifier,
-        messageCallback,
-        aggregateCallback,
-      );
-      return { identifier, messageCallback };
+    const offs = agentIds.map((agentId) => {
+      const channel = { agent_id: agentId, name: channelName };
+      return client.gateway.subscribeToChannel(channel, {
+        onAggregate: (agg) =>
+          patchAgentAggregate(agentId, agg as Aggregate<TData>),
+      });
     });
-
+    void client.gateway.connect();
     return () => {
-      for (const { identifier, messageCallback } of subscriptions) {
-        client.viewer
-          .unsubscribeFromChannel(identifier, messageCallback)
-          .catch(() => {});
-      }
+      for (const off of offs) off();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);

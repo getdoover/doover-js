@@ -22,6 +22,11 @@ export interface DooverClientConfig extends AuthConfig {
    * in browsers and automatically skipped in non-browser environments.
    */
   disableBrowserLifecycleHooks?: boolean;
+  /** Stable id for this client as a data source. Defaults to "cloud". Used in
+   *  `__source` provenance and `DataClientStatus.clientId`. */
+  sourceId?: string;
+  /** Optional human label for this source (UI/debug). */
+  sourceLabel?: string;
 }
 
 export interface RequestOptions {

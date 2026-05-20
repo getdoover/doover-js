@@ -8,12 +8,30 @@ import type {
   GatewayListenerMap,
   WebSocketSession,
 } from "./types";
-import type { ChannelRef, JSONValue } from "../types/common";
+import type { Aggregate, ChannelRef, JSONValue, MessageStructure } from "../types/common";
+
+export type GatewayProvenanceHook = <T>(
+  value: T,
+  ctx: { event: string; sessionId?: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+) => any;
 
 type ListenerSet<K extends keyof GatewayListenerMap> = Set<GatewayListenerMap[K]>;
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 30_000;
+
+export interface ChannelHandlers {
+  onMessage?: (msg: MessageStructure) => void;
+  onMessageUpdate?: (msg: MessageStructure, requestData?: JSONValue) => void;
+  onAggregate?: (agg: Aggregate) => void;
+}
+
+interface ChannelRegistryEntry {
+  handlers: Set<ChannelHandlers>;
+  /** Bound listeners we attached to `this.on(...)` so we can remove them. */
+  cleanup: Array<() => void>;
+}
 
 export class GatewayClient {
   private socket: WebSocket | null = null;
@@ -40,8 +58,10 @@ export class GatewayClient {
     close: new Set(),
   };
   private subscriptions = new Map<string, { channel: ChannelRef; diff_only: boolean }>();
+  private channelRegistry = new Map<string, ChannelRegistryEntry>();
   private readonly auth: DooverAuth | null;
   private stats: DooverStatsCollector | null = null;
+  private provenanceHook: GatewayProvenanceHook | null = null;
 
   constructor(private readonly config: DooverClientConfig, auth?: DooverAuth) {
     this.auth = auth ?? null;
@@ -51,6 +71,21 @@ export class GatewayClient {
   /** Attach a stats collector. Call with `null` to detach. */
   setStats(stats: DooverStatsCollector | null): void {
     this.stats = stats;
+  }
+
+  /** Optional hook that stamps `__source` provenance onto emitted gateway
+   *  payloads. `DooverClient` / `LocalAgentClient` set this; standalone
+   *  `GatewayClient` users leave it null and get raw payloads. */
+  setProvenanceHook(hook: GatewayProvenanceHook | null): void {
+    this.provenanceHook = hook;
+  }
+
+  private stamp<T>(value: T, event: string): T {
+    if (!this.provenanceHook) return value;
+    return this.provenanceHook(value, {
+      event,
+      ...(this.session?.session_id ? { sessionId: this.session.session_id } : {}),
+    });
   }
 
   async connect(): Promise<void> {
@@ -162,6 +197,66 @@ export class GatewayClient {
     });
   }
 
+  /**
+   * Attach channel-scoped handlers. Returns an idempotent unsubscribe fn.
+   * The first handler for a channel triggers a wire-level subscribe; the
+   * last detach triggers a wire-level unsubscribe.
+   */
+  subscribeToChannel(channel: ChannelRef, handlers: ChannelHandlers): () => void {
+    const key = this.channelKey(channel);
+    let entry = this.channelRegistry.get(key);
+    if (!entry) {
+      entry = { handlers: new Set(), cleanup: [] };
+      this.channelRegistry.set(key, entry);
+
+      const matches = (c: ChannelRef) =>
+        c.agent_id === channel.agent_id && c.name === channel.name;
+
+      const onMsgCreate = (msg: MessageStructure) => {
+        if (!matches(msg.channel)) return;
+        entry!.handlers.forEach((h) => h.onMessage?.(msg));
+      };
+      const onMsgUpdate = (msg: MessageStructure, requestData?: JSONValue) => {
+        if (!matches(msg.channel)) return;
+        entry!.handlers.forEach((h) => h.onMessageUpdate?.(msg, requestData));
+      };
+      const onAggregate = (event: { channel: ChannelRef; aggregate: Aggregate }) => {
+        if (!matches(event.channel)) return;
+        entry!.handlers.forEach((h) => h.onAggregate?.(event.aggregate));
+      };
+      const onChannelSync = (event: { channel: ChannelRef; aggregate: Aggregate }) => {
+        if (!matches(event.channel)) return;
+        entry!.handlers.forEach((h) => h.onAggregate?.(event.aggregate));
+      };
+
+      this.on("messageCreate", onMsgCreate);
+      this.on("messageUpdate", onMsgUpdate);
+      this.on("aggregateUpdate", onAggregate);
+      this.on("channelSync", onChannelSync);
+      entry.cleanup.push(
+        () => this.off("messageCreate", onMsgCreate),
+        () => this.off("messageUpdate", onMsgUpdate),
+        () => this.off("aggregateUpdate", onAggregate),
+        () => this.off("channelSync", onChannelSync),
+      );
+
+      this.subscribe(channel);
+    }
+
+    entry.handlers.add(handlers);
+    let detached = false;
+    return () => {
+      if (detached) return;
+      detached = true;
+      entry!.handlers.delete(handlers);
+      if (entry!.handlers.size === 0) {
+        entry!.cleanup.forEach((fn) => fn());
+        this.channelRegistry.delete(key);
+        this.unsubscribe(channel);
+      }
+    };
+  }
+
   syncChannel(channel: ChannelRef) {
     if (!this.isConnected()) {
       void this.connect();
@@ -256,26 +351,26 @@ export class GatewayClient {
         this.resubscribeAll();
         break;
       case "ChannelSync":
-        this.emit("channelSync", message.d);
+        this.emit("channelSync", this.stamp(message.d, "channelSync"));
         break;
       case "MessageCreate":
-        this.emit("messageCreate", addTimestampToMessage(message.d));
+        this.emit("messageCreate", this.stamp(addTimestampToMessage(message.d), "messageCreate"));
         break;
       case "MessageUpdate":
         this.emit(
           "messageUpdate",
-          addTimestampToMessage(message.d.message),
+          this.stamp(addTimestampToMessage(message.d.message), "messageUpdate"),
           message.d.request_data,
         );
         break;
       case "AggregateUpdate":
-        this.emit("aggregateUpdate", message.d);
+        this.emit("aggregateUpdate", this.stamp(message.d, "aggregateUpdate"));
         break;
       case "AlarmTrigger":
-        this.emit("alarmTrigger", message.d);
+        this.emit("alarmTrigger", this.stamp(message.d, "alarmTrigger"));
         break;
       case "OneShotMessage":
-        this.emit("oneShotMessage", message.d);
+        this.emit("oneShotMessage", this.stamp(message.d, "oneShotMessage"));
         break;
       case "ChannelSubscription":
         this.emit("channelSubscription", message.d);

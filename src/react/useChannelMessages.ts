@@ -15,8 +15,12 @@ export function channelMessagesQueryKey(
   agentId: string | undefined,
   channelName: string | undefined,
   fields?: readonly string[],
+  sources?: string[],
 ) {
-  const key = ["doover", "agent", agentId, "channel", channelName, "messages"] as const;
+  // Source-dimension the key (multiplex source subsets cache independently);
+  // "*" means "all/unspecified" for a plain DooverClient/LocalAgentClient.
+  const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
+  const key = ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
   if (!fields || fields.length === 0) return key;
   // A `field_name`-filtered request returns a different message stream than
   // the unfiltered (or differently-filtered) one, so it must live under its
@@ -58,6 +62,13 @@ export interface UseChannelMessagesOptions {
    * bound this will walk the channel back to its first message.
    */
   autoPaginate?: boolean;
+  /**
+   * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
+   * `DooverClient` or `LocalAgentClient`. When set, the query key is
+   * source-dimensioned so data from different source subsets is cached
+   * independently.
+   */
+  sources?: string[];
 }
 
 type Page<TData> = MessageStructure<TData>[];
@@ -88,7 +99,8 @@ export function useChannelMessages<TData = unknown>(
   const initialBefore = options?.initialBefore;
   const after = options?.after;
   const autoPaginate = options?.autoPaginate ?? false;
-  const key = channelMessagesQueryKey(agentId, channelName, fields);
+  const sources = options?.sources;
+  const key = channelMessagesQueryKey(agentId, channelName, fields, sources);
 
   const onMessage = useCallback(
     (message: MessageStructure) => {
@@ -117,7 +129,7 @@ export function useChannelMessages<TData = unknown>(
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, agentId, channelName, fields?.join(",")],
+    [queryClient, agentId, channelName, fields?.join(","), sources?.join(",")],
   );
 
   useChannelSubscription(liveUpdates ? identifier : undefined, { onMessage });
@@ -130,13 +142,22 @@ export function useChannelMessages<TData = unknown>(
     getNextPageParam: (lastPage) =>
       lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
     queryFn: async ({ pageParam }) => {
-      const page = await client.viewer.getMessages(identifier, {
+      if (!agentId || !channelName) return [] as Page<TData>;
+      const id = { agentId, channelName };
+      const params = {
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
         ...(after !== undefined ? { after } : {}),
-      });
-      return (page ?? []) as Page<TData>;
+        order: "asc" as const,
+      };
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `never` since the TypeScript overloads don't declare it.
+      const sourcesArg = sources ? { sources } : undefined;
+      const page = sourcesArg
+        ? await (client.messages.listMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(id, params, sourcesArg)
+        : await client.messages.listMessages(id, params);
+      return page as Page<TData>;
     },
   });
 
