@@ -69,6 +69,30 @@ describe("API clients", () => {
     );
   });
 
+  it("chunks getMultiAgentAggregates over the per-request agent cap", async () => {
+    const { rest, fetchMock } = setupRest((url) => {
+      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      return createJsonResponse({
+        results: ids.map((id) => ({ agent_id: id, data: {}, attachments: [] })),
+        count: ids.length,
+      });
+    });
+    const api = new AgentsApi(rest);
+
+    // 600 agents → 3 chunks of 250/250/100.
+    const agentIds = Array.from({ length: 600 }, (_, i) => `a${i}`);
+    const aggregates = await api.getMultiAgentAggregates("c1", {
+      agent_id: agentIds,
+    });
+
+    expect(fetchMock.callCount).to.equal(3);
+    expect(aggregates.results).to.have.length(600);
+    expect(aggregates.count).to.equal(600);
+    // Every agent is represented exactly once across the merged chunks.
+    const returnedIds = aggregates.results.map((r) => r.agent_id).sort();
+    expect(returnedIds).to.deep.equal([...agentIds].sort());
+  });
+
   it("covers channels methods", async () => {
     const { rest, fetchMock } = setupRest(() => createJsonResponse([]));
     const api = new ChannelsApi(rest);

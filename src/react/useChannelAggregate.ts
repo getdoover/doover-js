@@ -29,7 +29,12 @@ export interface UseChannelAggregateResult<TData>
   data: TData | undefined;
   /** Attachments (files/blobs) on the aggregate. */
   attachments: Aggregate["attachments"] | undefined;
-  /** Server timestamp (epoch seconds) of the last aggregate update. */
+  /**
+   * Server timestamp (epoch **milliseconds**) of the last aggregate update —
+   * matches the `Date` / `dayjs()` constructor. Use `dayjs(last_updated)`, not
+   * `dayjs.unix(last_updated)` (the latter assumes seconds and lands ~58000
+   * years in the future).
+   */
   last_updated: number | null | undefined;
 }
 
