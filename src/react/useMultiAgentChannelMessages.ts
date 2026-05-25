@@ -13,9 +13,10 @@ export function multiAgentChannelMessagesQueryKey(
   channelName: string,
   agentIds: string[],
   sources?: string[],
+  scope?: { after?: string; fields?: readonly string[] },
 ) {
   const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
-  return [
+  const base = [
     "doover",
     "channel",
     channelName,
@@ -24,6 +25,18 @@ export function multiAgentChannelMessagesQueryKey(
     "src",
     sourceDim,
   ] as const;
+  // Pagination cursors come from the first page's response and are scoped
+  // to *that* response's `after`/`fields`. Mixing them under one cache
+  // entry would cause `getNextPageParam` to anchor on an unrelated page,
+  // so a differently-bounded request must live under its own key.
+  const scopeKey: Record<string, unknown> = {};
+  if (scope?.after) scopeKey.after = scope.after;
+  if (scope?.fields && scope.fields.length > 0) {
+    scopeKey.fields = [...scope.fields].sort();
+  }
+  return Object.keys(scopeKey).length > 0
+    ? ([...base, scopeKey] as const)
+    : base;
 }
 
 export interface UseMultiAgentChannelMessagesOptions {
@@ -37,6 +50,14 @@ export interface UseMultiAgentChannelMessagesOptions {
   fields?: string[];
   /** Optional first-page `before` cursor (snowflake id). */
   initialBefore?: string;
+  /**
+   * Optional lower-bound snowflake id. Forwarded server-side so each
+   * agent's pagination stops on its own once it walks past the bound —
+   * mirrors `useChannelMessages`'s `after`. Use this to fetch a bounded
+   * time window (e.g. last 24h) across many agents without filtering
+   * on the client.
+   */
+  after?: string;
   /**
    * Restrict to these source ids on a `MultiplexClient`. Ignored for a plain
    * `DooverClient` or `LocalAgentClient`. When set, the query key is
@@ -69,7 +90,11 @@ export function useMultiAgentChannelMessages<TData = unknown>(
   const fields = options?.fields;
   const initialBefore = options?.initialBefore;
   const sources = options?.sources;
-  const key = multiAgentChannelMessagesQueryKey(channelName, agentIds, sources);
+  const after = options?.after;
+  const key = multiAgentChannelMessagesQueryKey(channelName, agentIds, sources, {
+    after,
+    fields,
+  });
 
   const prependMessage = useCallback(
     (message: MessageStructure) => {
@@ -118,6 +143,7 @@ export function useMultiAgentChannelMessages<TData = unknown>(
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+        ...(after !== undefined ? { after } : {}),
       };
       // Pass `{ sources }` as a trailing bag only when set — cast through
       // `never` since the TypeScript overloads don't declare it.

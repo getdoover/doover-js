@@ -95,6 +95,8 @@ export type * from "./types/common";
 export type * from "./types/connection";
 export type * from "./types/openapi";
 export type * from "./types/viewer";
+export type * from "./types/audit";
+export { DV_AUDIT_CHANNEL } from "./types/audit";
 
 export {
   addTimestampToMessage,
