@@ -82,8 +82,10 @@ export class RpcDispatcher {
 
       this.messages
         .postMessage(channel.agentId, channel.channelName, {
-          type: "rpc",
-          ...request,
+          data: {
+            type: "rpc",
+            ...request,
+          },
         } as never)
         .then((message) => {
           const pending: PendingRpc<TPending> = {
