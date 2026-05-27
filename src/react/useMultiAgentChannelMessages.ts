@@ -40,7 +40,19 @@ export function multiAgentChannelMessagesQueryKey(
 }
 
 export interface UseMultiAgentChannelMessagesOptions {
+  /**
+   * Global cap on the total number of messages returned across all agents
+   * for a single request. The server distributes this budget across agents
+   * in newest-first order, so a noisy agent can starve quieter ones.
+   * Prefer `agentMessageLimit` when you want a fair per-agent slice.
+   */
   limit?: number;
+  /**
+   * Per-agent cap on messages returned. Forwarded as `agent_message_limit`.
+   * Use this when fanning out across many agents that have wildly different
+   * message rates and you want each agent's window represented.
+   */
+  agentMessageLimit?: number;
   /** If false, skip live subscriptions per agent. Defaults true. */
   liveUpdates?: boolean;
   /**
@@ -86,6 +98,7 @@ export function useMultiAgentChannelMessages<TData = unknown>(
   const client = useDooverClient();
   const queryClient = useQueryClient();
   const limit = options?.limit;
+  const agentMessageLimit = options?.agentMessageLimit;
   const liveUpdates = options?.liveUpdates ?? true;
   const fields = options?.fields;
   const initialBefore = options?.initialBefore;
@@ -112,8 +125,12 @@ export function useMultiAgentChannelMessages<TData = unknown>(
         };
       });
     },
+    // `key` captures every scope dim (agentIds + sources + after + fields);
+    // serialise the whole thing so the closure refreshes when any dim
+    // changes — listing dims by hand drops live updates whenever the list
+    // grows (we used to omit `after`/`fields`).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, channelName, agentIds.join(","), sources?.join(",")],
+    [queryClient, JSON.stringify(key)],
   );
 
   useEffect(() => {
@@ -142,6 +159,9 @@ export function useMultiAgentChannelMessages<TData = unknown>(
         agent_id: agentIds,
         ...(typeof pageParam === "string" ? { before: pageParam } : {}),
         ...(limit !== undefined ? { limit } : {}),
+        ...(agentMessageLimit !== undefined
+          ? { agent_message_limit: agentMessageLimit }
+          : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
         ...(after !== undefined ? { after } : {}),
       };

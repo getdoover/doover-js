@@ -196,20 +196,73 @@ export class AgentsApi {
     return { ...raw, agents: merged, results: merged, count: merged.length };
   }
 
+  /**
+   * Batch-fetch recent messages for many agents. Auto-chunks `agent_id`
+   * (and the parallel `agent_before` cursors, if given) at MULTI_AGENT_CHUNK_SIZE
+   * so each request's URL stays under CloudFront's 8,192-byte quota. Chunks
+   * are fetched in parallel and merged: `results`/`count` concat-and-sum,
+   * `next_cursors`/`at_limit_agent_ids` union, legacy `next` becomes the
+   * lexically-highest cursor across at-limit agents.
+   */
   async getMultiAgentMessages(
     channelName: string,
     params: MultiAgentMessagesParams,
   ): Promise<BatchMessagesResponse> {
-    const response = await this.rest.get<BatchMessagesResponse>(
-      `/agents/channels/${channelName}/messages`,
-      params,
-    );
-    return {
+    const path = `/agents/channels/${channelName}/messages`;
+    const { agent_id, agent_before, ...rest } = params;
+    const stampTimestamps = (response: BatchMessagesResponse): BatchMessagesResponse => ({
       ...response,
       results: response.results.map((message) =>
         "timestamp" in message ? message : addTimestampToMessage(message),
       ) as MessageStructure[],
+    });
+    if (agent_id.length <= MULTI_AGENT_CHUNK_SIZE) {
+      const response = await this.rest.get<BatchMessagesResponse>(path, params);
+      return stampTimestamps(response);
+    }
+    if (agent_before && agent_before.length !== agent_id.length) {
+      throw new Error(
+        "agent_before must be the same length as agent_id when set",
+      );
+    }
+    const chunks: { agent_id: string[]; agent_before?: string[] }[] = [];
+    for (let i = 0; i < agent_id.length; i += MULTI_AGENT_CHUNK_SIZE) {
+      chunks.push({
+        agent_id: agent_id.slice(i, i + MULTI_AGENT_CHUNK_SIZE),
+        ...(agent_before
+          ? { agent_before: agent_before.slice(i, i + MULTI_AGENT_CHUNK_SIZE) }
+          : {}),
+      });
+    }
+    const responses = await Promise.all(
+      chunks.map((chunk) =>
+        this.rest
+          .get<BatchMessagesResponse>(path, { ...rest, ...chunk })
+          .then(stampTimestamps),
+      ),
+    );
+    // Merge: results/count concat-and-sum; next_cursors merge; at_limit_agent_ids
+    // concat (both keyed by agent id, unique across chunks). Legacy `next` is the
+    // lexically-highest oldest-cursor across at-limit agents — snowflakes sort
+    // lexically since they're equal-width digit strings.
+    const merged: BatchMessagesResponse = {
+      results: responses.flatMap((r) => r.results),
+      count: responses.reduce((acc, r) => acc + r.count, 0),
     };
+    const nexts = responses
+      .map((r) => r.next)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+    if (nexts.length > 0) {
+      merged.next = nexts.reduce((a, b) => (a > b ? a : b));
+    }
+    const cursors: Record<string, string> = {};
+    for (const r of responses) {
+      if (r.next_cursors) Object.assign(cursors, r.next_cursors);
+    }
+    if (Object.keys(cursors).length > 0) merged.next_cursors = cursors;
+    const atLimit = responses.flatMap((r) => r.at_limit_agent_ids ?? []);
+    if (atLimit.length > 0) merged.at_limit_agent_ids = atLimit;
+    return merged;
   }
 
   /**

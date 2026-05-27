@@ -93,6 +93,88 @@ describe("API clients", () => {
     expect(returnedIds).to.deep.equal([...agentIds].sort());
   });
 
+  it("chunks getMultiAgentMessages over the per-request agent cap", async () => {
+    const baseTs = new Date("2026-01-01T00:00:00Z");
+    const { rest, fetchMock } = setupRest((url) => {
+      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      return createJsonResponse({
+        results: ids.map((id, i) => ({
+          id: generateSnowflakeIdAtTime(new Date(baseTs.getTime() + i)),
+          author_id: "u",
+          channel: { agent_id: id, name: "c1" },
+          data: {},
+          attachments: [],
+        })),
+        count: ids.length,
+      });
+    });
+    const api = new AgentsApi(rest);
+
+    // 600 agents → 3 chunks of 250/250/100.
+    const agentIds = Array.from({ length: 600 }, (_, i) => `a${i}`);
+    const messages = await api.getMultiAgentMessages("c1", {
+      agent_id: agentIds,
+      agent_message_limit: 50,
+    });
+
+    expect(fetchMock.callCount).to.equal(3);
+    expect(messages.results).to.have.length(600);
+    expect(messages.count).to.equal(600);
+    const returnedIds = messages.results
+      .map((m) => m.channel.agent_id)
+      .sort();
+    expect(returnedIds).to.deep.equal([...agentIds].sort());
+    // Per-request param survives chunking.
+    for (let i = 0; i < 3; i++) {
+      const url = fetchMock.getCall(i).args[0] as string;
+      expect(url).to.include("agent_message_limit=50");
+    }
+  });
+
+  it("merges next_cursors and at_limit_agent_ids across chunks", async () => {
+    let call = 0;
+    const cursors = [
+      { "a0": "100", "a1": "200" },
+      { "a250": "150" },
+    ];
+    const atLimit = [["a0", "a1"], ["a250"]];
+    const { rest } = setupRest((url) => {
+      const idx = call++;
+      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      return createJsonResponse({
+        results: ids.map((id) => ({
+          id: generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:00Z")),
+          author_id: "u",
+          channel: { agent_id: id, name: "c1" },
+          data: {},
+          attachments: [],
+        })),
+        count: ids.length,
+        next: idx === 0 ? "200" : "150",
+        next_cursors: cursors[idx],
+        at_limit_agent_ids: atLimit[idx],
+      });
+    });
+    const api = new AgentsApi(rest);
+
+    const agentIds = Array.from({ length: 300 }, (_, i) => `a${i}`);
+    const messages = await api.getMultiAgentMessages("c1", {
+      agent_id: agentIds,
+    });
+
+    expect(messages.next).to.equal("200"); // max across chunks
+    expect(messages.next_cursors).to.deep.equal({
+      a0: "100",
+      a1: "200",
+      a250: "150",
+    });
+    expect(messages.at_limit_agent_ids?.sort()).to.deep.equal([
+      "a0",
+      "a1",
+      "a250",
+    ]);
+  });
+
   it("covers channels methods", async () => {
     const { rest, fetchMock } = setupRest(() => createJsonResponse([]));
     const api = new ChannelsApi(rest);

@@ -48,7 +48,7 @@ export interface AuditRequestContext {
 }
 
 /** Origin system for the event. */
-export type AuditSource = "control" | "fusionauth" | "data" | "tunnels";
+export type AuditSource = "control" | "auth" | "data" | "tunnels";
 
 /**
  * String-literal union of every wired audit action — kept in lock-step with
