@@ -86,10 +86,11 @@ describe("MessagesApi overloads + defaults", () => {
     const restB = makeRestStub();
     const apiA = new MessagesApi(restA);
     const apiB = new MessagesApi(restB);
-    await apiA.listMessages("a1", "c1", { limit: 5, order: "desc" });
+    const before = "185536526405337088";
+    await apiA.listMessages("a1", "c1", { limit: 5, order: "desc", before });
     await apiB.listMessages(
       { agentId: "a1", channelName: "c1" },
-      { limit: 5, order: "desc" },
+      { limit: 5, order: "desc", before },
     );
     expect(restA.calls).to.deep.equal(restB.calls);
   });
