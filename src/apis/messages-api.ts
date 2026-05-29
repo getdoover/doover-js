@@ -19,6 +19,12 @@ export interface ListMessagesParams {
    * index 0.
    */
   order?: "asc" | "desc";
+  /**
+   * Opt into paginated timeseries responses (`getTimeseries` only). When true
+   * the server returns a `next` cursor alongside `{ results, count }`; pass it
+   * back as `before` to page through results.
+   */
+  paginate?: boolean;
 }
 
 export interface MessageMutationParams {

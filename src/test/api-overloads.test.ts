@@ -139,6 +139,15 @@ describe("MessagesApi overloads + defaults", () => {
     expect(wireParams.order).to.equal(undefined);
     expect(wireParams.limit).to.equal(5);
   });
+
+  it("getTimeseries forwards paginate to the server", async () => {
+    const rest = makeRestStub();
+    const api = new MessagesApi(rest);
+    await api.getTimeseries("a1", "c1", { limit: 1500, paginate: true });
+    const wireParams = rest.calls[0]!.args[1] as Record<string, unknown>;
+    expect(wireParams.paginate).to.equal(true);
+    expect(wireParams.limit).to.equal(1500);
+  });
 });
 
 import { AggregatesApi } from "../apis/aggregates-api";

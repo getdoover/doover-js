@@ -164,6 +164,7 @@ export interface DataSeriesResult {
 export interface DataSeries {
   count: number;
   results: DataSeriesResult[];
+  next?: string | null;
   __source?: SourceProvenance;
 }
 
