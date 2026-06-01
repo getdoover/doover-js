@@ -38,6 +38,48 @@ export interface User {
   [key: string]: unknown;
 }
 
+export interface Theme {
+  [key: string]: unknown;
+}
+
+export interface OrganisationDomain {
+  id: string;
+  hostname: string;
+  default: boolean;
+}
+
+export interface Organisation {
+  id: string;
+  name: string;
+  archived: boolean;
+  application_id: string;
+  domains: OrganisationDomain[];
+  root_group?: unknown;
+  retention_period?: number;
+  legacy_doover_api_key?: string | null;
+  llm_api_key?: string | null;
+  extra_config?: Record<string, unknown>;
+  theme?: Theme;
+  __source?: SourceProvenance;
+  [key: string]: unknown;
+}
+
+export interface CustomerSite {
+  id: string;
+  name: string;
+  application_id: string;
+  archived: boolean;
+  theme: Theme;
+}
+
+export interface PaginatedResponse<T> {
+  count: number;
+  results: T[];
+  next?: string | null;
+  previous?: string | null;
+  [key: string]: unknown;
+}
+
 export interface GetAgentsOptions {
   includeArchived?: boolean;
   includeOrganisations?: boolean;

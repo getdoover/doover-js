@@ -27,6 +27,8 @@ export { ChannelsApi } from "./apis/channels-api";
 export { ConnectionsApi } from "./apis/connections-api";
 export { MessagesApi } from "./apis/messages-api";
 export { NotificationsApi } from "./apis/notifications-api";
+export { OrganisationsApi } from "./apis/organisations-api";
+export type { ListOrganisationsOptions } from "./apis/organisations-api";
 export { PermissionsApi } from "./apis/permissions-api";
 export { ProcessorsApi } from "./apis/processors-api";
 export { TurnApi } from "./apis/turn-api";

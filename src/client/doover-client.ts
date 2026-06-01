@@ -5,6 +5,7 @@ import { ChannelsApi } from "../apis/channels-api";
 import { ConnectionsApi } from "../apis/connections-api";
 import { MessagesApi } from "../apis/messages-api";
 import { NotificationsApi } from "../apis/notifications-api";
+import { OrganisationsApi } from "../apis/organisations-api";
 import { PermissionsApi } from "../apis/permissions-api";
 import { ProcessorsApi } from "../apis/processors-api";
 import { TurnApi } from "../apis/turn-api";
@@ -51,6 +52,7 @@ export class DooverClient implements DataClient {
   readonly alarms: AlarmsApiLike;
   readonly connections: ConnectionsApiLike;
   readonly notifications: NotificationsApiLike;
+  readonly organisations: OrganisationsApi;
   readonly permissions: PermissionsApiLike;
   readonly processors: ProcessorsApiLike;
   readonly turn: TurnApiLike;
@@ -111,6 +113,7 @@ export class DooverClient implements DataClient {
     this.alarms = wrapSubclient(new AlarmsApi(this.rest), "alarms", stamper) as unknown as AlarmsApiLike;
     this.connections = wrapSubclient(new ConnectionsApi(this.rest), "connections", stamper) as unknown as ConnectionsApiLike;
     this.notifications = wrapSubclient(new NotificationsApi(this.rest), "notifications", stamper) as unknown as NotificationsApiLike;
+    this.organisations = wrapSubclient(new OrganisationsApi(this.rest, config.controlApiUrl), "organisations", stamper) as OrganisationsApi;
     this.permissions = wrapSubclient(new PermissionsApi(this.rest), "permissions", stamper) as unknown as PermissionsApiLike;
     this.processors = wrapSubclient(new ProcessorsApi(this.rest), "processors", stamper) as unknown as ProcessorsApiLike;
     this.turn = wrapSubclient(new TurnApi(this.rest), "turn", stamper) as unknown as TurnApiLike;

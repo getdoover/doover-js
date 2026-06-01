@@ -287,6 +287,7 @@ describe("ProcessorsApi overloads", () => {
 });
 
 import { AgentsApi } from "../apis/agents-api";
+import { OrganisationsApi } from "../apis/organisations-api";
 
 describe("AgentsApi listAgents", () => {
   it("calls /agents/ on controlApiUrl with omitSharingHeader", async () => {
@@ -333,5 +334,56 @@ describe("AgentsApi listAgents", () => {
     expect(ids).to.deep.equal(["a1", "o1", "u1"]);
     const types = (result.results ?? []).map((a) => a.type).sort();
     expect(types).to.deep.equal(["device", "organisation", "user"]);
+  });
+});
+
+describe("OrganisationsApi", () => {
+  it("lists organisations on controlApiUrl with expected query params", async () => {
+    const rest = makeRestStub();
+    const api = new OrganisationsApi(rest, "https://control.example.com");
+    rest.get = ((...args: unknown[]) => {
+      rest.calls.push({ method: "get", args });
+      return Promise.resolve({ count: 0, results: [] });
+    }) as unknown as RestClient["get"];
+
+    await api.listOrganisations({
+      page: 2,
+      perPage: 50,
+      search: "pump",
+      archived: false,
+    });
+
+    expect(rest.calls).to.deep.equal([
+      {
+        method: "get",
+        args: [
+          "/organisations/",
+          { page: 2, per_page: 50, search: "pump", archived: false },
+          "https://control.example.com",
+        ],
+      },
+    ]);
+  });
+
+  it("maps an organisation to customer-site bootstrap shape", () => {
+    const rest = makeRestStub();
+    const api = new OrganisationsApi(rest);
+
+    expect(
+      api.toCustomerSite({
+        id: "org-1",
+        name: "Org One",
+        archived: false,
+        application_id: "app-1",
+        domains: [],
+        theme: { accent_colour: "#0c71c3" },
+      }),
+    ).to.deep.equal({
+      id: "org-1",
+      name: "Org One",
+      archived: false,
+      application_id: "app-1",
+      theme: { accent_colour: "#0c71c3" },
+    });
   });
 });

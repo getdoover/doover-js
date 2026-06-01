@@ -110,7 +110,7 @@ export class RestClient {
     if (!options.omitSharingHeader) {
       headers.set("X-Doover-Sharing", this.config.sharing);
     }
-    if (this.config.organisationId) {
+    if (this.config.organisationId && !headers.has("X-Doover-Organisation")) {
       headers.set("X-Doover-Organisation", this.config.organisationId);
     }
     const impersonated = this.getImpersonatedUserId();
