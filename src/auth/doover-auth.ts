@@ -41,6 +41,12 @@ export abstract class DooverAuth {
   ): void;
 
   /**
+   * Imperatively set or clear the refresh token. Subclasses that do not use
+   * refresh tokens may no-op.
+   */
+  abstract setRefreshToken(refreshToken: string | null): void;
+
+  /**
    * Ensure the auth layer is ready (e.g. token refreshed if needed).
    * Called before every HTTP request and before opening a websocket.
    */

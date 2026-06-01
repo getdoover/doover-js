@@ -79,6 +79,12 @@ export class DooverTokenAuth extends DooverAuth {
   ): void {
     this.token = token;
     this.tokenExpires = this.resolveExpiry(tokenExpires, token);
+    this.persistToProfile();
+  }
+
+  setRefreshToken(refreshToken: string | null): void {
+    this.refreshToken = refreshToken;
+    this.persistToProfile();
   }
 
   async ensureReady(): Promise<void> {

@@ -30,6 +30,10 @@ export class CookieAuth extends DooverAuth {
     // No-op for cookie auth.
   }
 
+  setRefreshToken(_refreshToken: string | null): void {
+    // No-op for cookie auth.
+  }
+
   async ensureReady(): Promise<void> {
     // Nothing to prepare for cookie auth.
   }

@@ -103,6 +103,32 @@ describe("DooverTokenAuth", () => {
     });
   });
 
+  it("setRefreshToken updates the refresh token used by ensureReady", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({
+        access_token: "new-access-token",
+        expires_in: 3600,
+      }),
+    );
+    const auth = new DooverTokenAuth({
+      token: null,
+      authServerUrl: "https://auth.example.com",
+      authServerClientId: "client-1",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+    auth.setRefreshToken("new-refresh-token");
+
+    await auth.ensureReady();
+
+    expect(fetchMock.callCount).to.equal(1);
+    expect(fetchMock.firstCall.args[0]).to.contain(
+      "refresh_token=new-refresh-token",
+    );
+    expect(await auth.getHttpHeaders()).to.deep.equal({
+      Authorization: "Bearer new-access-token",
+    });
+  });
+
   // -- Refresh behaviour ----------------------------------------------------
 
   it("does not refresh when token is clearly valid", async () => {
