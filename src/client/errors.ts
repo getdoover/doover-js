@@ -54,3 +54,26 @@ export class AmbiguousWriteError extends DooverApiError {
     Object.setPrototypeOf(this, AmbiguousWriteError.prototype);
   }
 }
+
+/**
+ * Thrown by offline-aware clients when a network-only operation is attempted
+ * while offline, or when an offline read has no usable cached value.
+ */
+export class DooverOfflineError extends DooverApiError {
+  readonly operation: string;
+  readonly cacheKey?: string;
+
+  constructor(operation: string, message?: string, cacheKey?: string) {
+    super({
+      status: 0,
+      body: { operation, cacheKey },
+      url: "",
+      method: "",
+      message: message ?? `Operation "${operation}" is unavailable while offline.`,
+    });
+    this.name = "DooverOfflineError";
+    this.operation = operation;
+    this.cacheKey = cacheKey;
+    Object.setPrototypeOf(this, DooverOfflineError.prototype);
+  }
+}

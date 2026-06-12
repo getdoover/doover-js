@@ -7,6 +7,7 @@ import type {
 } from "../types/openapi";
 import { addTimestampToMessage, generateSnowflakeIdAtTime } from "../utils/snowflake";
 import { resolveChannelArgs } from "./_args";
+import type { DooverRequestOptions } from "../client/request-options";
 
 export interface ListMessagesParams {
   before?: string;
@@ -64,8 +65,19 @@ export class MessagesApi {
     params?: ListMessagesParams,
   ): Promise<MessageStructure[]>;
   listMessages(
+    agentId: string,
+    channelName: string,
+    params: ListMessagesParams,
+    requestOptions: DooverRequestOptions,
+  ): Promise<MessageStructure[]>;
+  listMessages(
     identifier: { agentId: string; channelName: string },
     params?: ListMessagesParams,
+  ): Promise<MessageStructure[]>;
+  listMessages(
+    identifier: { agentId: string; channelName: string },
+    params: ListMessagesParams,
+    requestOptions: DooverRequestOptions,
   ): Promise<MessageStructure[]>;
   async listMessages(...args: unknown[]): Promise<MessageStructure[]> {
     const { agentId, channelName, options } = resolveChannelArgs<ListMessagesParams>(args);

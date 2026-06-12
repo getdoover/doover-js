@@ -17,6 +17,10 @@ describe("public exports (Phase 1–3)", () => {
     expect(doover.ALL_CAPABILITIES).to.be.an("array");
     expect(doover.UnsupportedCapabilityError).to.be.a("function");
     expect(doover.AmbiguousWriteError).to.be.a("function");
+    expect(doover.DooverOfflineError).to.be.a("function");
+    expect(doover.OfflineDataClient).to.be.a("function");
+    expect(doover.MemoryOfflineStorageAdapter).to.be.a("function");
+    expect(doover.requestOptions).to.be.a("function");
   });
 
   it("type-only exports resolve (compile-time)", () => {
@@ -41,7 +45,7 @@ describe("public exports (Phase 1–3)", () => {
   });
 
   it("exports the full Phase-1..4 surface", () => {
-    for (const name of ["ALL_CAPABILITIES", "UnsupportedCapabilityError", "AmbiguousWriteError", "LocalAgentClient", "MultiplexClient", "DooverClient"]) {
+    for (const name of ["ALL_CAPABILITIES", "UnsupportedCapabilityError", "AmbiguousWriteError", "DooverOfflineError", "LocalAgentClient", "MultiplexClient", "DooverClient", "OfflineDataClient", "MemoryOfflineStorageAdapter", "requestOptions"]) {
       expect((doover as Record<string, unknown>)[name], name).to.exist;
     }
   });

@@ -6,6 +6,7 @@ import type { ChannelIdentifier } from "../types/viewer";
 import { DooverApiError } from "../http/errors";
 import { useDooverClient } from "./context";
 import { useChannelSubscription } from "./useChannelSubscription";
+import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus";
 
 export function channelAggregateQueryKey(
   agentId: string | undefined,
@@ -38,6 +39,8 @@ export interface UseChannelAggregateResult<TData>
    * years in the future).
    */
   last_updated: number | null | undefined;
+  /** Offline/cache status when the provided client supports offline caching. */
+  offline: OfflineStatusSnapshot;
 }
 
 export interface UseChannelAggregateOptions {
@@ -80,6 +83,7 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
   options?: UseChannelAggregateOptions,
 ): UseChannelAggregateResult<TData> {
   const client = useDooverClient();
+  const offline = useOfflineStatus();
   const queryClient = useQueryClient();
   const { agentId, channelName } = identifier;
   const sources = options?.sources;
@@ -133,5 +137,6 @@ export function useChannelAggregate<TData = Aggregate["data"]>(
     data: aggregate?.data,
     attachments: aggregate?.attachments,
     last_updated: aggregate?.last_updated,
+    offline,
   };
 }

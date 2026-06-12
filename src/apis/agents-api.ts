@@ -7,6 +7,7 @@ import type {
 import type { Agent, AgentsResponse, GetAgentsOptions } from "../types/viewer";
 import { addTimestampToMessage } from "../utils/snowflake";
 import type { RestClient } from "../http/rest-client";
+import type { DooverRequestOptions } from "../client/request-options";
 
 export interface MultiAgentMessagesParams {
   agent_id: string[];
@@ -162,11 +163,21 @@ export class AgentsApi {
     private readonly controlApiUrl?: string,
   ) {}
 
-  async listAgents(options?: GetAgentsOptions): Promise<AgentsResponse> {
+  listAgents(options?: GetAgentsOptions): Promise<AgentsResponse>;
+  listAgents(requestOptions?: DooverRequestOptions): Promise<AgentsResponse>;
+  listAgents(
+    options?: GetAgentsOptions,
+    requestOptions?: DooverRequestOptions,
+  ): Promise<AgentsResponse>;
+  async listAgents(
+    options?: GetAgentsOptions | DooverRequestOptions,
+    _requestOptions?: DooverRequestOptions,
+  ): Promise<AgentsResponse> {
+    const agentOptions = options as GetAgentsOptions | undefined;
     const query: Record<string, boolean> = {};
-    if (options?.includeArchived) query["include-archived"] = true;
-    if (options?.includeOrganisations) query["include-organisations"] = true;
-    if (options?.includeUsers) query["include-users"] = true;
+    if (agentOptions?.includeArchived) query["include-archived"] = true;
+    if (agentOptions?.includeOrganisations) query["include-organisations"] = true;
+    if (agentOptions?.includeUsers) query["include-users"] = true;
 
     const raw = await this.rest.request<AgentsResponse>({
       path: "/agents/",
@@ -178,18 +189,18 @@ export class AgentsApi {
     const rawAgents = Array.isArray(raw.agents) ? raw.agents : [];
     const normalizedAgents = rawAgents.map(normalizeAgentEntry);
 
-    if (!options?.mergeIncludedAsAgents) {
+    if (!agentOptions?.mergeIncludedAsAgents) {
       return { ...raw, agents: normalizedAgents };
     }
 
     const merged: Agent[] = [...normalizedAgents];
-    if (options.includeOrganisations) {
+    if (agentOptions.includeOrganisations) {
       const rawOrgs = Array.isArray(raw.organisations)
         ? (raw.organisations as unknown[])
         : [];
       for (const org of rawOrgs) merged.push(normalizeOrganisationEntry(org));
     }
-    if (options.includeUsers) {
+    if (agentOptions.includeUsers) {
       const rawUsers = Array.isArray(raw.users) ? (raw.users as unknown[]) : [];
       for (const user of rawUsers) merged.push(normalizeUserEntry(user));
     }

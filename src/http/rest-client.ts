@@ -231,7 +231,10 @@ export class RestClient {
     }
     if (
       contentType.includes("application/octet-stream") ||
-      contentType.includes("application/pdf")
+      contentType.includes("application/pdf") ||
+      contentType.startsWith("image/") ||
+      contentType.startsWith("video/") ||
+      contentType.startsWith("audio/")
     ) {
       return response.blob();
     }

@@ -10,6 +10,7 @@ import type { MessageStructure } from "../types/common";
 import type { ChannelIdentifier } from "../types/viewer";
 import { useDooverClient } from "./context";
 import { useChannelSubscription } from "./useChannelSubscription";
+import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus";
 
 export function channelMessagesQueryKey(
   agentId: string | undefined,
@@ -79,6 +80,8 @@ export interface UseChannelMessagesResult<TData>
   messages: MessageStructure<TData>[];
   /** Raw react-query data (pages). */
   data: InfiniteData<Page<TData>> | undefined;
+  /** Offline/cache status when the provided client supports offline caching. */
+  offline: OfflineStatusSnapshot;
 }
 
 /**
@@ -91,6 +94,7 @@ export function useChannelMessages<TData = unknown>(
   options?: UseChannelMessagesOptions,
 ): UseChannelMessagesResult<TData> {
   const client = useDooverClient();
+  const offline = useOfflineStatus();
   const queryClient = useQueryClient();
   const { agentId, channelName } = identifier;
   const limit = options?.limit;
@@ -172,5 +176,5 @@ export function useChannelMessages<TData = unknown>(
     [query.data],
   );
 
-  return { ...query, messages };
+  return { ...query, messages, offline };
 }

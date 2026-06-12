@@ -43,7 +43,27 @@ export type { RpcStatsSnapshot } from "./client/stats";
 
 export { ALL_CAPABILITIES } from "./client/capabilities";
 export type { Capability } from "./client/capabilities";
-export { UnsupportedCapabilityError, AmbiguousWriteError } from "./client/errors";
+export { UnsupportedCapabilityError, AmbiguousWriteError, DooverOfflineError } from "./client/errors";
+export {
+  OfflineDataClient,
+  MemoryOfflineStorageAdapter,
+  DEFAULT_OFFLINE_RETENTION_MS,
+} from "./client/offline-cache";
+export type {
+  OfflineCacheMode,
+  OfflineReadCacheOptions,
+  OfflineChannelPolicy,
+  OfflineCacheScope,
+  OfflineCacheRecord,
+  OfflineStorageAdapter,
+  OfflineDataClientOptions,
+} from "./client/offline-cache";
+export {
+  requestOptions,
+  isDooverRequestOptions,
+  splitRequestOptions,
+} from "./client/request-options";
+export type { DooverRequestOptions } from "./client/request-options";
 export type {
   DataClient,
   AgentScope,

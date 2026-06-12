@@ -6,6 +6,7 @@ import type {
   PutChannelRequest,
 } from "../types/openapi";
 import { resolveAgentArgs, resolveChannelArgs } from "./_args";
+import type { DooverRequestOptions } from "../client/request-options";
 
 export interface ListChannelsOptions {
   include_aggregate?: boolean;
@@ -28,7 +29,11 @@ export class ChannelsApi {
   constructor(private readonly rest: RestClient) {}
 
   listChannels(agentId: string, options?: ListChannelsOptions): Promise<Channel[]>;
+  listChannels(agentId: string, requestOptions: DooverRequestOptions): Promise<Channel[]>;
+  listChannels(agentId: string, options: ListChannelsOptions, requestOptions: DooverRequestOptions): Promise<Channel[]>;
   listChannels(identifier: { agentId: string }, options?: ListChannelsOptions): Promise<Channel[]>;
+  listChannels(identifier: { agentId: string }, requestOptions: DooverRequestOptions): Promise<Channel[]>;
+  listChannels(identifier: { agentId: string }, options: ListChannelsOptions, requestOptions: DooverRequestOptions): Promise<Channel[]>;
   listChannels(...args: unknown[]): Promise<Channel[]> {
     const { agentId, options } = resolveAgentArgs<ListChannelsOptions>(args);
     return this._listChannels(agentId, options);
@@ -38,9 +43,20 @@ export class ChannelsApi {
   }
 
   getChannel(agentId: string, channelName: string, options?: GetChannelOptions): Promise<Channel>;
+  getChannel(agentId: string, channelName: string, requestOptions: DooverRequestOptions): Promise<Channel>;
+  getChannel(agentId: string, channelName: string, options: GetChannelOptions, requestOptions: DooverRequestOptions): Promise<Channel>;
   getChannel(
     identifier: { agentId: string; channelName: string },
     options?: GetChannelOptions,
+  ): Promise<Channel>;
+  getChannel(
+    identifier: { agentId: string; channelName: string },
+    requestOptions: DooverRequestOptions,
+  ): Promise<Channel>;
+  getChannel(
+    identifier: { agentId: string; channelName: string },
+    options: GetChannelOptions,
+    requestOptions: DooverRequestOptions,
   ): Promise<Channel>;
   getChannel(...args: unknown[]): Promise<Channel> {
     const { agentId, channelName, options } = resolveChannelArgs<GetChannelOptions>(args);

@@ -1,6 +1,7 @@
 import type { RestClient } from "../http/rest-client";
 import type { Aggregate } from "../types/openapi";
 import { resolveChannelArgs } from "./_args";
+import type { DooverRequestOptions } from "../client/request-options";
 
 export interface AggregateMutationParams {
   suppress_response?: boolean;
@@ -12,7 +13,9 @@ export class AggregatesApi {
   constructor(private readonly rest: RestClient) {}
 
   getAggregate(agentId: string, channelName: string): Promise<Aggregate>;
+  getAggregate(agentId: string, channelName: string, requestOptions: DooverRequestOptions): Promise<Aggregate>;
   getAggregate(identifier: { agentId: string; channelName: string }): Promise<Aggregate>;
+  getAggregate(identifier: { agentId: string; channelName: string }, requestOptions: DooverRequestOptions): Promise<Aggregate>;
   getAggregate(...args: unknown[]): Promise<Aggregate> {
     const { agentId, channelName } = resolveChannelArgs<undefined>(args);
     return this._getAggregate(agentId, channelName);
@@ -107,8 +110,19 @@ export class AggregatesApi {
     attachmentId: string,
   ): Promise<Blob>;
   getAggregateAttachment(
+    agentId: string,
+    channelName: string,
+    attachmentId: string,
+    requestOptions: DooverRequestOptions,
+  ): Promise<Blob>;
+  getAggregateAttachment(
     identifier: { agentId: string; channelName: string },
     attachmentId: string,
+  ): Promise<Blob>;
+  getAggregateAttachment(
+    identifier: { agentId: string; channelName: string },
+    attachmentId: string,
+    requestOptions: DooverRequestOptions,
   ): Promise<Blob>;
   getAggregateAttachment(...args: unknown[]): Promise<Blob> {
     if (typeof args[0] === "string") {
