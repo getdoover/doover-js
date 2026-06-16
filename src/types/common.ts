@@ -182,10 +182,10 @@ export type RpcStatus<TPending = undefined> =
   | { code: "pending"; message: TPending }
   | { code: "success" };
 
-/** Who initiated an RPC (e.g. the logged-in user dispatching a ui_cmd). */
 export interface RpcActor {
   id: string;
   name: string;
+  email: string;
 }
 
 /** Shape a consumer posts to initiate an RPC. */
