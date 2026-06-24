@@ -77,6 +77,42 @@ describe("createRefineDataProvider", () => {
       group_id: "group-1",
     });
   });
+
+  it("normalizes API validation responses into Refine HttpError fields", async () => {
+    const body = {
+      deployment_config: {
+        port: ["This field is required."],
+      },
+    };
+    const fetchMock = createFetchMock(() => createJsonResponse(body, { status: 400 }));
+    const rest = new RestClient({
+      dataRestUrl: "https://data.example.com/api",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://data.example.com/gateway",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+    const provider = createRefineDataProvider(rest);
+
+    let error: unknown;
+    try {
+      await provider.update({
+        resource: "app-installs",
+        id: "install-1",
+        variables: { deployment_config: {} },
+      });
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).to.include({
+      statusCode: 400,
+      message: "This field is required.",
+    });
+    expect(error).to.have.nested.property(
+      "errors.deployment_config.port.0",
+      "This field is required.",
+    );
+  });
 });
 
 describe("getApiPath", () => {

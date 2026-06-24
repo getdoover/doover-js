@@ -1,3 +1,4 @@
+import { DooverApiError } from "../http/errors";
 import type { RestClient } from "../http/rest-client";
 
 export type RefineRecord = Record<string, unknown> & { id?: string | number };
@@ -69,6 +70,12 @@ interface PaginatedList<TData> {
   results: TData[];
 }
 
+interface RefineHttpError extends Error {
+  statusCode: number;
+  errors: unknown;
+  responseJson: unknown;
+}
+
 export function createRefineDataProvider(
   rest: RestClient,
   options: CreateRefineDataProviderOptions = {},
@@ -77,11 +84,11 @@ export function createRefineDataProvider(
 
   return {
     getOne: async ({ resource, id, meta }) => {
-      const data = await rest.request({
+      const data = await requestForRefine(() => rest.request({
         path: `/${getApiPath(resource, meta)}/${id}/`,
         headers: getMetaHeaders(meta),
         baseUrl,
-      });
+      }));
       return { data };
     },
 
@@ -92,12 +99,12 @@ export function createRefineDataProvider(
       filters,
       meta,
     }: RefineGetListParams) => {
-      const data = await rest.request<PaginatedList<TData>>({
+      const data = await requestForRefine(() => rest.request<PaginatedList<TData>>({
         path: `/${getApiPath(resource, meta)}/`,
         query: buildListQuery({ pagination, sorters, filters, meta }),
         headers: getMetaHeaders(meta),
         baseUrl,
-      });
+      }));
       return {
         data: data.results,
         total: data.count,
@@ -106,52 +113,102 @@ export function createRefineDataProvider(
 
     create: async ({ resource, variables, meta }) => {
       const mergedMeta = isRecord(variables) ? { ...meta, ...variables } : meta;
-      const data = await rest.request({
+      const data = await requestForRefine(() => rest.request({
         path: `/${getApiPath(resource, mergedMeta)}/`,
         method: "POST",
         body: prepareVariables(variables, meta) as BodyInit | object | null | undefined,
         headers: getMetaHeaders(meta),
         baseUrl,
-      });
+      }));
       return { data };
     },
 
     update: async ({ resource, id, variables, meta }) => {
-      const data = await rest.request({
+      const data = await requestForRefine(() => rest.request({
         path: `/${getApiPath(resource, meta)}/${id}/`,
         method: "PATCH",
         body: prepareVariables(variables, meta) as BodyInit | object | null | undefined,
         headers: getMetaHeaders(meta),
         baseUrl,
-      });
+      }));
       return { data };
     },
 
     deleteOne: async ({ resource, id, meta }) => {
-      const data = await rest.request({
+      const data = await requestForRefine(() => rest.request({
         path: `/${getApiPath(resource, meta)}/${id}/`,
         method: "DELETE",
         headers: getMetaHeaders(meta),
         baseUrl,
-      });
+      }));
       return { data: data ?? null };
     },
 
     custom: async ({ url, method, headers, payload, meta }) => {
       const { path, query } = splitCustomUrl(url);
-      const data = await rest.request({
+      const data = await requestForRefine(() => rest.request({
         path,
         method,
         headers: { ...headers, ...getMetaHeaders(meta) },
         body: payload == null ? undefined : payload,
         query,
         baseUrl,
-      });
+      }));
       return { data };
     },
 
     getApiUrl: () => baseUrl,
   };
+}
+
+async function requestForRefine<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    throw normalizeRefineError(error);
+  }
+}
+
+function normalizeRefineError(error: unknown): unknown {
+  if (!(error instanceof DooverApiError)) return error;
+
+  const message = extractErrorMessage(error.body) ?? error.message;
+  const refineError = error as DooverApiError & RefineHttpError;
+  refineError.message = message;
+  refineError.statusCode = error.status;
+  refineError.errors = normalizeErrorBody(error.body);
+  refineError.responseJson = error.body;
+  return refineError;
+}
+
+function normalizeErrorBody(body: unknown): unknown {
+  if (isRecord(body) && "errors" in body && body.errors !== undefined) {
+    return body.errors;
+  }
+  return body;
+}
+
+function extractErrorMessage(body: unknown): string | undefined {
+  if (typeof body === "string") return body;
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const message = extractErrorMessage(item);
+      if (message) return message;
+    }
+    return undefined;
+  }
+  if (!isRecord(body)) return undefined;
+
+  for (const key of ["message", "detail", "error"] as const) {
+    const value = body[key];
+    if (typeof value === "string") return value;
+  }
+
+  for (const value of Object.values(body)) {
+    const message = extractErrorMessage(value);
+    if (message) return message;
+  }
+  return undefined;
 }
 
 function getMetaHeaders(meta?: RefineMeta): Record<string, string> | undefined {
