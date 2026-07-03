@@ -2,9 +2,37 @@ import { expect } from "chai";
 import { afterEach, beforeEach, describe, it } from "mocha";
 import sinon from "sinon";
 
+import { DooverAuth } from "../auth/doover-auth";
+import { DooverAuthError } from "../auth/errors";
 import { GatewayClient } from "../gateway/gateway-client";
 import { generateSnowflakeIdAtTime } from "../utils/snowflake";
 import { MockWebSocket } from "./helpers";
+
+class RejectingAuth extends DooverAuth {
+  async getHttpHeaders(): Promise<Record<string, string>> {
+    return {};
+  }
+
+  getFetchCredentials(): RequestCredentials {
+    return "omit";
+  }
+
+  async prepareWebSocket(url: string): Promise<{ url: string }> {
+    return { url };
+  }
+
+  setToken(): void {
+    // no-op for test
+  }
+
+  setRefreshToken(): void {
+    // no-op for test
+  }
+
+  async ensureReady(): Promise<void> {
+    throw new DooverAuthError("Authentication is invalid; sign in again");
+  }
+}
 
 describe("GatewayClient", () => {
   beforeEach(() => {
@@ -247,6 +275,34 @@ describe("GatewayClient", () => {
     ws.receive({ op: 3, d: {} });
     expect(cancelled.calledOnce).to.equal(true);
     expect(client.getSession()).to.equal(null);
+  });
+
+  it("reports background connect auth failures without creating a socket", async () => {
+    const client = new GatewayClient(
+      {
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "wss://ws.example.com",
+        webSocketImpl: MockWebSocket as unknown as typeof WebSocket,
+      },
+      new RejectingAuth(),
+    );
+
+    const wssError = sinon.spy();
+    client.on("wssError", wssError);
+    client.subscribe({ agent_id: "a1", name: "c1" });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).to.have.length(0);
+    expect(wssError.calledOnce).to.equal(true);
+    expect(wssError.firstCall.args[0]).to.deep.equal({
+      message: "Authentication is invalid; sign in again",
+    });
   });
 
   it("reconnects with exponential backoff + jitter on unexpected close", () => {

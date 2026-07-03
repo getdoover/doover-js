@@ -2,6 +2,7 @@ import { expect, use } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { beforeEach, describe, it } from "mocha";
 
+import { DooverAuth } from "../auth/doover-auth";
 import { DooverApiError } from "../http/errors";
 import { RestClient } from "../http/rest-client";
 import {
@@ -13,6 +14,39 @@ import {
 } from "./helpers";
 
 use(chaiAsPromised);
+
+class RefreshableAuth extends DooverAuth {
+  refreshCount = 0;
+
+  async getHttpHeaders(): Promise<Record<string, string>> {
+    return { Authorization: `Bearer token-${this.refreshCount}` };
+  }
+
+  getFetchCredentials(): RequestCredentials {
+    return "omit";
+  }
+
+  async prepareWebSocket(url: string): Promise<{ url: string }> {
+    return { url };
+  }
+
+  setToken(): void {
+    // no-op for test
+  }
+
+  setRefreshToken(): void {
+    // no-op for test
+  }
+
+  async ensureReady(): Promise<void> {
+    // no-op for test
+  }
+
+  async handleUnauthorized(): Promise<boolean> {
+    this.refreshCount += 1;
+    return true;
+  }
+}
 
 describe("RestClient", () => {
   beforeEach(() => {
@@ -144,6 +178,56 @@ describe("RestClient", () => {
       expect(error.url).to.equal("https://api.example.com/broken");
       expect(error.method).to.equal("GET");
     });
+  });
+
+  it("refreshes auth once and retries after a 401 response", async () => {
+    const auth = new RefreshableAuth();
+    const fetchMock = createFetchMock(() => {
+      if (fetchMock.callCount === 1) {
+        return createJsonResponse({ message: "expired" }, { status: 401 });
+      }
+      return createJsonResponse({ ok: true });
+    });
+    const client = new RestClient(
+      {
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "wss://ws.example.com",
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      auth,
+    );
+
+    await expect(client.get("/needs-auth")).to.eventually.deep.equal({ ok: true });
+
+    expect(auth.refreshCount).to.equal(1);
+    expect(fetchMock.callCount).to.equal(2);
+    expect((fetchMock.getCall(0).args[1]?.headers as Headers).get("Authorization")).to.equal("Bearer token-0");
+    expect((fetchMock.getCall(1).args[1]?.headers as Headers).get("Authorization")).to.equal("Bearer token-1");
+  });
+
+  it("does not retry a 401 response when auth refresh cannot recover", async () => {
+    const auth = new RefreshableAuth();
+    auth.handleUnauthorized = async () => false;
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({ message: "expired" }, { status: 401 }),
+    );
+    const client = new RestClient(
+      {
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "wss://ws.example.com",
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      auth,
+    );
+
+    await expect(client.get("/needs-auth")).to.be.rejected.then((error: DooverApiError) => {
+      expect(error.status).to.equal(401);
+      expect(error.message).to.equal("expired");
+    });
+
+    expect(fetchMock.callCount).to.equal(1);
   });
 
   it("returns text bodies when the response is not JSON", async () => {

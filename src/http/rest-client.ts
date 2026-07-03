@@ -90,22 +90,57 @@ export class RestClient {
   }
 
   private async doRequest<T>(options: RequestOptions): Promise<T> {
+    await this.prepareAuth();
+    const request = this.prepareRequest(options);
+    let response = await this.sendRequest(request);
+    let payload = await this.parseResponse(response);
+
+    if (response.status === 401 && this.auth) {
+      const recovered = await this.auth.handleUnauthorized();
+      if (recovered) {
+        await this.prepareAuth();
+        const retryRequest = this.prepareRequest(options);
+        response = await this.sendRequest(retryRequest);
+        payload = await this.parseResponse(response);
+      }
+    }
+
+    if (!response.ok) {
+      throw new DooverApiError({
+        status: response.status,
+        body: payload,
+        url: request.url,
+        method: request.method,
+        message:
+          typeof payload === "object" &&
+          payload !== null &&
+          "message" in payload &&
+          typeof (payload as { message?: unknown }).message === "string"
+            ? (payload as { message: string }).message
+            : undefined,
+      });
+    }
+
+    return payload as T;
+  }
+
+  private async prepareAuth(): Promise<void> {
     if (this.auth) {
       await this.auth.ensureReady();
     }
+  }
 
+  private prepareRequest(options: RequestOptions): {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: BodyInit | undefined;
+    credentials: RequestCredentials;
+  } {
     const method = options.method ?? "GET";
     const url = this.buildUrl(options.baseUrl ?? this.config.dataRestUrl, options.path, options.query);
     const headers = new Headers(options.headers);
     const body = this.normalizeBody(options.body, headers);
-
-    // Merge auth headers.
-    if (this.auth) {
-      const authHeaders = await this.auth.getHttpHeaders();
-      for (const [key, value] of Object.entries(authHeaders)) {
-        headers.set(key, value);
-      }
-    }
 
     if (!options.omitSharingHeader) {
       headers.set("X-Doover-Sharing", this.config.sharing);
@@ -122,32 +157,32 @@ export class RestClient {
       ? this.auth.getFetchCredentials()
       : "include";
 
-    const fetchImpl = this.config.fetchImpl ?? fetch;
-    const response = await fetchImpl(url, {
-      method,
-      headers,
-      body,
-      credentials,
-    });
+    return { url, method, headers, body, credentials };
+  }
 
-    const payload = await this.parseResponse(response);
-    if (!response.ok) {
-      throw new DooverApiError({
-        status: response.status,
-        body: payload,
-        url,
-        method,
-        message:
-          typeof payload === "object" &&
-          payload !== null &&
-          "message" in payload &&
-          typeof (payload as { message?: unknown }).message === "string"
-            ? (payload as { message: string }).message
-            : undefined,
-      });
+  private async sendRequest(request: {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: BodyInit | undefined;
+    credentials: RequestCredentials;
+  }): Promise<Response> {
+    // Merge auth headers immediately before fetch so a retry can use refreshed
+    // credentials without mutating the first request's Headers instance.
+    if (this.auth) {
+      const authHeaders = await this.auth.getHttpHeaders();
+      for (const [key, value] of Object.entries(authHeaders)) {
+        request.headers.set(key, value);
+      }
     }
 
-    return payload as T;
+    const fetchImpl = this.config.fetchImpl ?? fetch;
+    return fetchImpl(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      credentials: request.credentials,
+    });
   }
 
   get<T>(path: string, query?: RequestOptions["query"], baseUrl?: string) {

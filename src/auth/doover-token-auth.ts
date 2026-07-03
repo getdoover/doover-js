@@ -16,6 +16,7 @@ export class DooverTokenAuth extends DooverAuth {
   private authServerClientId: string | null;
   private fetchImpl: typeof fetch;
   private refreshInFlight: Promise<void> | null = null;
+  private authInvalid = false;
 
   constructor(options: {
     token?: string | null;
@@ -79,15 +80,24 @@ export class DooverTokenAuth extends DooverAuth {
   ): void {
     this.token = token;
     this.tokenExpires = this.resolveExpiry(tokenExpires, token);
+    if (token) {
+      this.authInvalid = false;
+    }
     this.persistToProfile();
   }
 
   setRefreshToken(refreshToken: string | null): void {
     this.refreshToken = refreshToken;
+    if (refreshToken) {
+      this.authInvalid = false;
+    }
     this.persistToProfile();
   }
 
   async ensureReady(): Promise<void> {
+    if (this.authInvalid) {
+      throw new DooverAuthError("Authentication is invalid; sign in again");
+    }
     if (!this.needsRefresh()) {
       return;
     }
@@ -98,6 +108,23 @@ export class DooverTokenAuth extends DooverAuth {
       });
     }
     return this.refreshInFlight;
+  }
+
+  override async handleUnauthorized(): Promise<boolean> {
+    if (this.authInvalid) {
+      return false;
+    }
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.refresh().finally(() => {
+        this.refreshInFlight = null;
+      });
+    }
+    try {
+      await this.refreshInFlight;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -154,6 +181,7 @@ export class DooverTokenAuth extends DooverAuth {
       !this.refreshToken ||
       !this.authServerClientId
     ) {
+      this.markAuthInvalid();
       throw new DooverAuthError(
         "Cannot refresh token: missing authServerUrl, refreshToken, or authServerClientId",
       );
@@ -179,6 +207,9 @@ export class DooverTokenAuth extends DooverAuth {
     }
 
     if (!response.ok) {
+      if (response.status >= 400 && response.status < 500) {
+        this.markAuthInvalid();
+      }
       throw new DooverAuthError(
         `Token refresh failed with status ${response.status}`,
       );
@@ -191,11 +222,13 @@ export class DooverTokenAuth extends DooverAuth {
     };
 
     if (!body.access_token) {
+      this.markAuthInvalid();
       throw new DooverAuthError(
         "Token refresh response did not contain an access_token",
       );
     }
 
+    this.authInvalid = false;
     this.token = body.access_token;
     this.tokenExpires =
       typeof body.expires_in === "number"
@@ -218,9 +251,7 @@ export class DooverTokenAuth extends DooverAuth {
     this.profile.tokenExpires = this.tokenExpires
       ? this.tokenExpires.toISOString()
       : null;
-    if (this.refreshToken) {
-      this.profile.refreshToken = this.refreshToken;
-    }
+    this.profile.refreshToken = this.refreshToken;
     if (this.configManager) {
       try {
         this.configManager.create(this.profile);
@@ -231,6 +262,14 @@ export class DooverTokenAuth extends DooverAuth {
         );
       }
     }
+  }
+
+  private markAuthInvalid(): void {
+    this.authInvalid = true;
+    this.token = null;
+    this.tokenExpires = null;
+    this.refreshToken = null;
+    this.persistToProfile();
   }
 
   private resolveExpiry(

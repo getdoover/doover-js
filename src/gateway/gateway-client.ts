@@ -170,7 +170,7 @@ export class GatewayClient {
       diff_only: options?.diff_only ?? false,
     });
     if (!this.isConnected()) {
-      void this.connect();
+      this.connectInBackground();
       return;
     }
     this.send({
@@ -259,7 +259,7 @@ export class GatewayClient {
 
   syncChannel(channel: ChannelRef) {
     if (!this.isConnected()) {
-      void this.connect();
+      this.connectInBackground();
       return;
     }
     this.send({
@@ -273,7 +273,7 @@ export class GatewayClient {
 
   sendOneShotMessage(channel: ChannelRef, data: JSONValue) {
     if (!this.isConnected()) {
-      void this.connect();
+      this.connectInBackground();
       return;
     }
     this.send({
@@ -439,8 +439,16 @@ export class GatewayClient {
     this.reconnectAttempts += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      void this.connect();
+      this.connectInBackground();
     }, delay);
+  }
+
+  private connectInBackground() {
+    void this.connect().catch((err: unknown) => {
+      this.emit("wssError", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   /** Exponential backoff with full-jitter, capped at RECONNECT_CAP_MS. */
@@ -483,7 +491,7 @@ export class GatewayClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    void this.connect();
+    this.connectInBackground();
   }
 
   private channelKey(channel: ChannelRef) {

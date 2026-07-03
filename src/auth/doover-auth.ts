@@ -52,6 +52,15 @@ export abstract class DooverAuth {
    */
   abstract ensureReady(): Promise<void>;
 
+  /**
+   * Called after an authenticated HTTP request receives a 401. Return true when
+   * the auth layer recovered (for example by forcing a token refresh) and the
+   * request should be retried once.
+   */
+  async handleUnauthorized(): Promise<boolean> {
+    return false;
+  }
+
   /** Attach a profile and optional config manager for refresh persistence. */
   attachProfile(
     profile: AuthProfile,
