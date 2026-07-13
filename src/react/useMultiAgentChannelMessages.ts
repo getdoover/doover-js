@@ -63,6 +63,21 @@ export interface UseMultiAgentChannelMessagesOptions {
   /** Optional first-page `before` cursor (snowflake id). */
   initialBefore?: string;
   /**
+   * Keep paging older automatically until `hasNextPage` is false. Each page
+   * resumes only the agents that hit `agentMessageLimit`, using their own
+   * cursors, so a noisy agent doesn't drag the quiet ones back through
+   * messages they've already returned. Almost always combined with `after`
+   * — without a lower bound this walks every agent's channel back to its
+   * first message. `maxPages` caps the walk.
+   */
+  autoPaginate?: boolean;
+  /**
+   * Hard cap on pages fetched when `autoPaginate` is set. Defaults to 20.
+   * Guards against a window that's wider than `agentMessageLimit × maxPages`
+   * messages turning into an unbounded fetch loop.
+   */
+  maxPages?: number;
+  /**
    * Optional lower-bound snowflake id. Forwarded server-side so each
    * agent's pagination stops on its own once it walks past the bound —
    * mirrors `useChannelMessages`'s `after`. Use this to fetch a bounded
@@ -81,7 +96,53 @@ export interface UseMultiAgentChannelMessagesOptions {
 
 interface Page<TData> {
   results: MessageStructure<TData>[];
-  next?: string;
+  /**
+   * Per-agent resume cursors, keyed by agent id. Present (and non-empty)
+   * only for agents that hit the per-agent limit before draining the
+   * window. This is the canonical "there is more" signal.
+   */
+  next_cursors?: Record<string, string>;
+  /** Legacy single-cursor signal, for servers predating `next_cursors`. */
+  next?: string | null;
+  /** Legacy: agent ids that may have more older messages. */
+  at_limit_agent_ids?: string[];
+}
+
+/**
+ * Cursor for the next page. `agentIds` narrows the fetch to the agents that
+ * still have older messages; `agentBefore` is parallel to it, giving each
+ * one its own upper bound. `before` is only used on the legacy path.
+ */
+interface PageParam {
+  before?: string;
+  agentIds?: string[];
+  agentBefore?: string[];
+}
+
+function nextPageParam<TData>(lastPage: Page<TData> | undefined): PageParam | undefined {
+  if (!lastPage) return undefined;
+  const cursors = lastPage.next_cursors;
+  if (cursors) {
+    const entries = Object.entries(cursors);
+    // Present-but-empty means every agent drained its window: we're done.
+    if (entries.length === 0) return undefined;
+    return {
+      agentIds: entries.map(([id]) => id),
+      agentBefore: entries.map(([, cursor]) => cursor),
+    };
+  }
+  // Legacy server: one global `before` for whichever agents were at limit.
+  // Those agents whose own cursor is older than `next` re-return a few
+  // messages we already hold — harmless, since we dedupe by id below.
+  if (typeof lastPage.next === "string" && lastPage.next) {
+    return {
+      before: lastPage.next,
+      ...(lastPage.at_limit_agent_ids?.length
+        ? { agentIds: lastPage.at_limit_agent_ids }
+        : {}),
+    };
+  }
+  return undefined;
 }
 
 export interface UseMultiAgentChannelMessagesResult<TData>
@@ -104,6 +165,8 @@ export function useMultiAgentChannelMessages<TData = unknown>(
   const initialBefore = options?.initialBefore;
   const sources = options?.sources;
   const after = options?.after;
+  const autoPaginate = options?.autoPaginate ?? false;
+  const maxPages = options?.maxPages ?? 20;
   const key = multiAgentChannelMessagesQueryKey(channelName, agentIds, sources, {
     after,
     fields,
@@ -148,16 +211,17 @@ export function useMultiAgentChannelMessages<TData = unknown>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
 
-  const query = useInfiniteQuery<Page<TData>>({
+  const query = useInfiniteQuery<Page<TData>, Error, InfiniteData<Page<TData>>, typeof key, PageParam>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
-    initialPageParam: initialBefore as string | undefined,
-    getNextPageParam: (lastPage) => lastPage?.next,
+    initialPageParam: (initialBefore ? { before: initialBefore } : {}) as PageParam,
+    getNextPageParam: nextPageParam,
     queryFn: async ({ pageParam }) => {
       const params = {
-        agent_id: agentIds,
-        ...(typeof pageParam === "string" ? { before: pageParam } : {}),
+        agent_id: pageParam.agentIds ?? agentIds,
+        ...(pageParam.before ? { before: pageParam.before } : {}),
+        ...(pageParam.agentBefore ? { agent_before: pageParam.agentBefore } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(agentMessageLimit !== undefined
           ? { agent_message_limit: agentMessageLimit }
@@ -175,10 +239,34 @@ export function useMultiAgentChannelMessages<TData = unknown>(
     },
   });
 
-  const messages = useMemo(
-    () => (query.data?.pages ?? []).flatMap((p) => p.results),
-    [query.data],
-  );
+  useEffect(() => {
+    if (!autoPaginate) return;
+    if (query.isFetching || !query.hasNextPage) return;
+    if ((query.data?.pages.length ?? 0) >= maxPages) return;
+    query.fetchNextPage();
+  }, [
+    autoPaginate,
+    maxPages,
+    query.isFetching,
+    query.hasNextPage,
+    query.fetchNextPage,
+    query.data?.pages.length,
+  ]);
+
+  const messages = useMemo(() => {
+    // The legacy single-cursor path (and a live push that races a page
+    // fetch) can hand us the same message twice; keep the first copy.
+    const seen = new Set<string>();
+    const out: MessageStructure<TData>[] = [];
+    for (const page of query.data?.pages ?? []) {
+      for (const message of page.results) {
+        if (seen.has(message.id)) continue;
+        seen.add(message.id);
+        out.push(message);
+      }
+    }
+    return out;
+  }, [query.data]);
 
   return { ...query, messages };
 }

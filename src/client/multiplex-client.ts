@@ -571,9 +571,24 @@ export class MultiplexClient implements DataClient {
         self.assertSomeMemberSupports("agents.multiAgentMessages");
         let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentMessages"));
         if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
-        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentMessages as (...a: unknown[]) => Promise<{ results: { id: string }[] }>)(...args)));
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentMessages as (...a: unknown[]) => Promise<{ results: { id: string }[]; next_cursors?: Record<string, string> }>)(...args)));
         const merged = mergeMessages(responses.map((r) => r.results) as never, { order: "desc" });
-        return { results: merged, count: merged.length } as never;
+        // Union each member's per-agent resume cursors so a paginating caller
+        // keeps walking. If one agent lives in two members with different
+        // cursors, keep the lexically-highest (newest) — resuming from the
+        // older one would skip the newer member's tail; resuming from the
+        // newer just re-fetches a few messages that dedupe by id downstream.
+        const nextCursors: Record<string, string> = {};
+        for (const r of responses) {
+          for (const [id, cursor] of Object.entries(r.next_cursors ?? {})) {
+            if (!(id in nextCursors) || cursor > nextCursors[id]!) nextCursors[id] = cursor;
+          }
+        }
+        return {
+          results: merged,
+          count: merged.length,
+          ...(Object.keys(nextCursors).length > 0 ? { next_cursors: nextCursors } : {}),
+        } as never;
       },
       async getMultiAgentAggregates(channelName: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([channelName, ...rest]);
