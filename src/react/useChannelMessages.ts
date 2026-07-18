@@ -8,6 +8,8 @@ import {
 
 import type { MessageStructure } from "../types/common";
 import type { ChannelIdentifier } from "../types/viewer";
+import { generateSnowflakeIdAtTime } from "../utils/snowflake";
+import { getChannelRangeStore } from "./messageRangeStore";
 import { useDooverClient } from "./context";
 import { useChannelSubscription } from "./useChannelSubscription";
 import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus";
@@ -17,11 +19,17 @@ export function channelMessagesQueryKey(
   channelName: string | undefined,
   fields?: readonly string[],
   sources?: string[],
+  anchor?: string,
 ) {
   // Source-dimension the key (multiplex source subsets cache independently);
   // "*" means "all/unspecified" for a plain DooverClient/LocalAgentClient.
   const sourceDim = sources && sources.length ? [...sources].sort().join(",") : "*";
-  const key = ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
+  const base = ["doover", "agent", agentId, "channel", channelName, "messages", "src", sourceDim] as const;
+  // An anchored window is its own chain of cursors, so it must not share a cache
+  // entry with the live one — same reasoning as `fields` below. Note this is
+  // deliberately absent from the range store's key: sharing ranges across
+  // anchors is the point of it.
+  const key = anchor ? ([...base, { anchor }] as const) : base;
   if (!fields || fields.length === 0) return key;
   // A `field_name`-filtered request returns a different message stream than
   // the unfiltered (or differently-filtered) one, so it must live under its
@@ -50,6 +58,20 @@ export interface UseChannelMessagesOptions {
    */
   initialBefore?: string;
   /**
+   * Pin the window to a point in history (snowflake id), for "jump to this
+   * date" navigation. Changing it re-anchors and refetches.
+   *
+   * Distinct from `initialBefore`, which is a clock-skew seed regenerated per
+   * mount and therefore must NOT dimension the cache key. An anchor identifies
+   * a stream the caller means to look at, so it does. Pass a stable value — a
+   * per-render `now` would refetch on every render.
+   *
+   * Cheaper than it looks: anchored windows share the range cache with every
+   * other window on the channel, so re-anchoring over already-fetched history
+   * costs no requests.
+   */
+  anchor?: string;
+  /**
    * Optional lower-bound snowflake id. The server only returns messages
    * newer than this on every page, so paginating older eventually returns
    * an empty page and `hasNextPage` flips to false — useful for fetching
@@ -73,6 +95,9 @@ export interface UseChannelMessagesOptions {
 }
 
 type Page<TData> = MessageStructure<TData>[];
+
+/** Mirrors `MessagesApi.listMessages`'s own default. */
+const DEFAULT_PAGE_LIMIT = 10;
 
 export interface UseChannelMessagesResult<TData>
   extends Omit<UseInfiniteQueryResult<InfiniteData<Page<TData>>>, "data"> {
@@ -101,10 +126,32 @@ export function useChannelMessages<TData = unknown>(
   const liveUpdates = options?.liveUpdates ?? true;
   const fields = options?.fields;
   const initialBefore = options?.initialBefore;
+  const anchor = options?.anchor;
   const after = options?.after;
   const autoPaginate = options?.autoPaginate ?? false;
   const sources = options?.sources;
-  const key = channelMessagesQueryKey(agentId, channelName, fields, sources);
+  const key = channelMessagesQueryKey(agentId, channelName, fields, sources, anchor);
+
+  // Keyed per stream, NOT per anchor — every window on this channel shares it.
+  const storeKey = JSON.stringify(
+    channelMessagesQueryKey(agentId, channelName, fields, sources),
+  );
+  const store = getChannelRangeStore(storeKey);
+
+  // `after`/`sources` change what a page means (a short page proves a bound was
+  // hit, not that history ran out; multiplex merges several streams), so those
+  // requests bypass the range cache rather than record unsound coverage.
+  const rangeCacheable = after === undefined && !sources;
+
+  // A dropped socket may have swallowed messages, so the live feed stops being
+  // proof of coverage until a fetch re-establishes it.
+  useEffect(() => {
+    const onClose = () => store.sealTips();
+    client.gateway.on("close", onClose);
+    return () => {
+      client.gateway.off("close", onClose);
+    };
+  }, [client, store]);
 
   const onMessage = useCallback(
     (message: MessageStructure) => {
@@ -121,6 +168,8 @@ export function useChannelMessages<TData = unknown>(
           return;
         }
       }
+      if (rangeCacheable) store.recordLive(message);
+
       queryClient.setQueryData<InfiniteData<Page<TData>>>(key, (current) => {
         if (!current) return current;
         const typed = message as MessageStructure<TData>;
@@ -142,14 +191,29 @@ export function useChannelMessages<TData = unknown>(
     queryKey: key,
     enabled: !!agentId && !!channelName,
     staleTime: Infinity,
-    initialPageParam: initialBefore as string | undefined,
+    initialPageParam: (anchor ?? initialBefore) as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
     queryFn: async ({ pageParam }) => {
       if (!agentId || !channelName) return [] as Page<TData>;
       const id = { agentId, channelName };
+      // Resolve `before` here rather than letting the API default it, so the
+      // range store records the exact bound the request proved.
+      const before =
+        typeof pageParam === "string"
+          ? pageParam
+          : generateSnowflakeIdAtTime(new Date());
+      // Mirrors the API's own default; the store needs the limit actually applied
+      const effectiveLimit = limit ?? DEFAULT_PAGE_LIMIT;
+
+      if (rangeCacheable) {
+        const cached = store.read(BigInt(before), effectiveLimit);
+        if (cached) return cached as Page<TData>;
+      }
+
+      const requestedAt = Date.now();
       const params = {
-        ...(typeof pageParam === "string" ? { before: pageParam } : {}),
+        before,
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
         ...(after !== undefined ? { after } : {}),
@@ -161,6 +225,15 @@ export function useChannelMessages<TData = unknown>(
       const page = sourcesArg
         ? await (client.messages.listMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(id, params, sourcesArg)
         : await client.messages.listMessages(id, params);
+
+      if (rangeCacheable) {
+        store.record({
+          before: BigInt(before),
+          limit: effectiveLimit,
+          page: page as MessageStructure[],
+          at: requestedAt,
+        });
+      }
       return page as Page<TData>;
     },
   });
