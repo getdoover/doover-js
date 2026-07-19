@@ -11,6 +11,13 @@ import type { DooverRequestOptions } from "../client/request-options";
 
 export interface ListMessagesParams {
   before?: string;
+  /**
+   * Lower-bound cursor (exclusive). With `before` set (or defaulted) it merely
+   * floors the window. On its own — `after` set, `before` omitted — it pages
+   * *forward*: the server returns the `limit` **oldest** messages strictly
+   * newer than the cursor, oldest-first. This is the only way to walk history
+   * upward toward "now".
+   */
   after?: string;
   limit?: number;
   field_name?: string[];
@@ -45,15 +52,32 @@ interface ResolvedListMessagesQuery {
 function resolveListMessagesParams(params?: ListMessagesParams): {
   query: ResolvedListMessagesQuery;
   order: "asc" | "desc";
+  /** Order the server returns before any client-side reversal. */
+  serverAscending: boolean;
 } {
   const order = params?.order ?? "desc";
+  const hasAfter = params?.after !== undefined;
+  const hasBefore = params?.before !== undefined;
+  // The server keys pagination on whichever bound is sent: `before` walks
+  // newest-first downward, `after` alone walks oldest-first upward (the N
+  // oldest messages strictly newer than the cursor). Sending `after` without
+  // `before` is the only way to page forward; sending both, or neither, keeps
+  // the newest-first behaviour (defaulting `before` to "now" when unbounded).
+  if (hasAfter && !hasBefore) {
+    const query: ResolvedListMessagesQuery = {
+      after: params!.after,
+      limit: params?.limit ?? 10,
+    };
+    if (params?.field_name !== undefined) query.field_name = params.field_name;
+    return { query, order, serverAscending: true };
+  }
   const query: ResolvedListMessagesQuery = {
     before: params?.before ?? generateSnowflakeIdAtTime(new Date()),
     limit: params?.limit ?? 10,
   };
-  if (params?.after !== undefined) query.after = params.after;
+  if (hasAfter) query.after = params!.after;
   if (params?.field_name !== undefined) query.field_name = params.field_name;
-  return { query, order };
+  return { query, order, serverAscending: false };
 }
 
 export class MessagesApi {
@@ -88,13 +112,16 @@ export class MessagesApi {
     channelName: string,
     params?: ListMessagesParams,
   ): Promise<MessageStructure[]> {
-    const { query, order } = resolveListMessagesParams(params);
+    const { query, order, serverAscending } = resolveListMessagesParams(params);
     const response = await this.rest.get<Array<Omit<MessageStructure, "timestamp">>>(
       `/agents/${agentId}/channels/${channelName}/messages`,
       query,
     );
     const stamped = response.map(addTimestampToMessage);
-    return order === "asc" ? [...stamped].reverse() : stamped;
+    // The server returns newest-first for `before` and oldest-first for a bare
+    // `after`; reverse only when that native order differs from what was asked.
+    const wantAscending = order === "asc";
+    return serverAscending === wantAscending ? stamped : [...stamped].reverse();
   }
 
   postMessage(

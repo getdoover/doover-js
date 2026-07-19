@@ -8,6 +8,7 @@ import {
 
 import type { MessageStructure } from "../types/common";
 import type { ChannelIdentifier } from "../types/viewer";
+import type { ListMessagesParams } from "../apis/messages-api";
 import { generateSnowflakeIdAtTime } from "../utils/snowflake";
 import { getChannelRangeStore } from "./messageRangeStore";
 import { useDooverClient } from "./context";
@@ -95,6 +96,13 @@ export interface UseChannelMessagesOptions {
 }
 
 type Page<TData> = MessageStructure<TData>[];
+
+/**
+ * Cursor for one page. `before` pages older (down); a bare `after` pages newer
+ * (up) — the server returns the oldest messages strictly above it. The initial
+ * page uses `before` (the anchor, or a clock-skew seed, or "now").
+ */
+type PageParam = { before?: string; after?: string };
 
 /** Mirrors `MessagesApi.listMessages`'s own default. */
 const DEFAULT_PAGE_LIMIT = 10;
@@ -191,20 +199,58 @@ export function useChannelMessages<TData = unknown>(
     queryKey: key,
     enabled: !!agentId && !!channelName,
     staleTime: Infinity,
-    initialPageParam: (anchor ?? initialBefore) as string | undefined,
+    initialPageParam: { before: anchor ?? initialBefore } as PageParam,
+    // Older (down): the next cursor is the oldest id currently held.
     getNextPageParam: (lastPage) =>
-      lastPage && lastPage.length > 0 ? lastPage[0]?.id : undefined,
+      lastPage && lastPage.length > 0
+        ? ({ before: lastPage[0]?.id } as PageParam)
+        : undefined,
+    // Newer (up): only for an anchored window — the live window already begins
+    // at "now", so it has nothing above to page into. `after` = newest id held;
+    // the server returns the oldest messages above it, walking up toward now.
+    // An empty page whose own cursor was already a forward `after` means the
+    // top is reached; an empty *initial* page (nothing below the anchor) still
+    // seeds the walk from the anchor, since messages may sit above it.
+    getPreviousPageParam: (firstPage, _all, firstPageParam) => {
+      if (!anchor) return undefined;
+      if (firstPage && firstPage.length > 0) {
+        return { after: firstPage[firstPage.length - 1]?.id } as PageParam;
+      }
+      if ((firstPageParam as PageParam)?.after !== undefined) return undefined;
+      return { after: anchor } as PageParam;
+    },
     queryFn: async ({ pageParam }) => {
       if (!agentId || !channelName) return [] as Page<TData>;
       const id = { agentId, channelName };
-      // Resolve `before` here rather than letting the API default it, so the
-      // range store records the exact bound the request proved.
-      const before =
-        typeof pageParam === "string"
-          ? pageParam
-          : generateSnowflakeIdAtTime(new Date());
+      const param = (pageParam ?? {}) as PageParam;
       // Mirrors the API's own default; the store needs the limit actually applied
       const effectiveLimit = limit ?? DEFAULT_PAGE_LIMIT;
+
+      // Pass `{ sources }` as a trailing bag only when set — cast through
+      // `unknown` since the TypeScript overloads don't declare it.
+      const runList = (params: ListMessagesParams) =>
+        sources
+          ? (client.messages.listMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(id, params, { sources })
+          : (client.messages.listMessages(id, params) as Promise<Page<TData>>);
+
+      // Forward (newer) page: `after` alone pages oldest-first upward. Bypasses
+      // the range store, which models before-anchored windows only.
+      if (param.after !== undefined && param.before === undefined) {
+        const page = await runList({
+          after: param.after,
+          ...(limit !== undefined ? { limit } : {}),
+          ...(fields && fields.length > 0 ? { field_name: fields } : {}),
+          order: "asc",
+        });
+        return page as Page<TData>;
+      }
+
+      // Older page. Resolve `before` here rather than letting the API default
+      // it, so the range store records the exact bound the request proved.
+      const before =
+        typeof param.before === "string"
+          ? param.before
+          : generateSnowflakeIdAtTime(new Date());
 
       if (rangeCacheable) {
         const cached = store.read(BigInt(before), effectiveLimit);
@@ -212,19 +258,13 @@ export function useChannelMessages<TData = unknown>(
       }
 
       const requestedAt = Date.now();
-      const params = {
+      const page = await runList({
         before,
         ...(limit !== undefined ? { limit } : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
         ...(after !== undefined ? { after } : {}),
-        order: "asc" as const,
-      };
-      // Pass `{ sources }` as a trailing bag only when set — cast through
-      // `never` since the TypeScript overloads don't declare it.
-      const sourcesArg = sources ? { sources } : undefined;
-      const page = sourcesArg
-        ? await (client.messages.listMessages as unknown as (...a: unknown[]) => Promise<Page<TData>>)(id, params, sourcesArg)
-        : await client.messages.listMessages(id, params);
+        order: "asc",
+      });
 
       if (rangeCacheable) {
         store.record({

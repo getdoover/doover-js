@@ -252,6 +252,40 @@ describe("API clients", () => {
     expect(formData.get("attachment-0")).to.be.instanceOf(Blob);
   });
 
+  it("pages forward with a bare `after`: sends no `before`, keeps oldest-first", async () => {
+    const older = generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:00Z"));
+    const newer = generateSnowflakeIdAtTime(new Date("2026-01-02T00:00:00Z"));
+    // The `after`-only route returns oldest-first natively (scan_index_forward).
+    const nativeAsc = [
+      { id: older, author_id: "u", channel: { agent_id: "a1", name: "c1" }, data: {}, attachments: [] },
+      { id: newer, author_id: "u", channel: { agent_id: "a1", name: "c1" }, data: {}, attachments: [] },
+    ];
+    let lastQuery: URLSearchParams | undefined;
+    const { rest } = setupRest((url) => {
+      if (url.endsWith("/messages") || url.includes("/messages?")) {
+        lastQuery = new URL(url).searchParams;
+        return createJsonResponse(nativeAsc);
+      }
+      return createJsonResponse([]);
+    });
+    const api = new MessagesApi(rest);
+
+    // asc: server order already matches → no reversal, no `before` sent.
+    const asc = await api.listMessages("a1", "c1", { after: older, limit: 5, order: "asc" });
+    expect(lastQuery?.get("after")).to.equal(older);
+    expect(lastQuery?.has("before"), "bare `after` must not send `before`").to.equal(false);
+    expect(asc.map((m) => m.id)).to.deep.equal([older, newer]);
+
+    // desc over the same forward route reverses the native ascending page.
+    const desc = await api.listMessages("a1", "c1", { after: older, limit: 5, order: "desc" });
+    expect(desc.map((m) => m.id)).to.deep.equal([newer, older]);
+
+    // With `before` present, `after` is only a floor and both bounds are sent.
+    await api.listMessages("a1", "c1", { before: newer, after: older, limit: 5, order: "asc" });
+    expect(lastQuery?.get("before")).to.equal(newer);
+    expect(lastQuery?.get("after")).to.equal(older);
+  });
+
   it("covers aggregates and alarms methods", async () => {
     const { rest, fetchMock } = setupRest((url) => {
       if (url.includes("/attachments/")) {
