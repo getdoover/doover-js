@@ -412,6 +412,7 @@ export class OfflineDataClient implements DataClient {
       }) as AggregatesApiLike["getAggregate"],
       putAggregate: this.offlineGuard("aggregates.putAggregate", target.putAggregate.bind(target)) as AggregatesApiLike["putAggregate"],
       patchAggregate: this.offlineGuard("aggregates.patchAggregate", target.patchAggregate.bind(target)) as AggregatesApiLike["patchAggregate"],
+      batchPatchAggregates: this.offlineGuard("aggregates.batchPatchAggregates", target.batchPatchAggregates.bind(target)) as AggregatesApiLike["batchPatchAggregates"],
       getAggregateAttachment: ((...rawArgs: unknown[]) => {
         const { args, request } = splitRequestOptions(rawArgs);
         const { agentId, channelName } = extractChannelId(args);
@@ -475,6 +476,10 @@ export class OfflineDataClient implements DataClient {
       putMessage: this.offlineGuard("messages.putMessage", target.putMessage.bind(target)) as MessagesApiLike["putMessage"],
       patchMessage: this.offlineGuard("messages.patchMessage", target.patchMessage.bind(target)) as MessagesApiLike["patchMessage"],
       deleteMessage: this.offlineGuard("messages.deleteMessage", target.deleteMessage.bind(target)) as MessagesApiLike["deleteMessage"],
+      batchPostMessages: this.offlineGuard("messages.batchPostMessages", target.batchPostMessages.bind(target)) as MessagesApiLike["batchPostMessages"],
+      batchPatchMessages: this.offlineGuard("messages.batchPatchMessages", target.batchPatchMessages.bind(target)) as MessagesApiLike["batchPatchMessages"],
+      batchPutMessages: this.offlineGuard("messages.batchPutMessages", target.batchPutMessages.bind(target)) as MessagesApiLike["batchPutMessages"],
+      batchDeleteMessages: this.offlineGuard("messages.batchDeleteMessages", target.batchDeleteMessages.bind(target)) as MessagesApiLike["batchDeleteMessages"],
       getTimeseries: ((...args: unknown[]) =>
         (target.getTimeseries as (...inner: unknown[]) => Promise<unknown>)(...args)) as MessagesApiLike["getTimeseries"],
       getMessageAttachment: ((...rawArgs: unknown[]) => {

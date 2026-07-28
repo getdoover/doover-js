@@ -6,6 +6,7 @@ import type {
   RpcDispatcherLike, TurnApiLike, UsersApiLike,
 } from "./data-client";
 import { dedupeBy, mergeMessages } from "./multiplex-merge";
+import { mergeBatchResponses, type BatchResponse, type BatchResultItem } from "../types/batch";
 import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors";
 import { extractSnowflakeId } from "../utils/snowflake";
 import { MultiplexGateway, type MultiplexGatewayHost } from "./multiplex-gateway";
@@ -349,6 +350,82 @@ export class MultiplexClient implements DataClient {
     return () => Promise.reject(new UnsupportedCapabilityError(cap, this.clientId));
   }
 
+  /**
+   * Route a cross-agent batch mutation.
+   *
+   * A batch can name agents served by different members, so unlike
+   * `routedWrite` there is no single target. Each item is resolved to its own
+   * member using the same rules (unsupported and ambiguous both throw), the
+   * batch is split into one sub-batch per member, and results are stitched
+   * back into the caller's original item order.
+   *
+   * Resolution happens for every item up front so an unroutable item fails
+   * the whole call before any member is written to, rather than leaving a
+   * half-applied batch behind.
+   */
+  private routedBatchWrite(method: string, cap: Capability) {
+    const self = this;
+    return async function (...rawArgs: unknown[]) {
+      const { args, sources } = self.splitSourcesOption(rawArgs);
+      const items = (args[0] ?? []) as Array<{ agent_id: string }>;
+      if (!Array.isArray(items) || items.length === 0) {
+        return { items: [], count: 0, succeeded: 0, failed: 0 };
+      }
+
+      const groups = new Map<
+        string,
+        { client: DataClient; items: unknown[]; indices: number[] }
+      >();
+      items.forEach((item, index) => {
+        let members = self.candidates(item.agent_id, cap, sources);
+        if (sources && sources.length === 1) {
+          const only = members.find((m) => m.id === sources[0]);
+          if (!only) throw new UnsupportedCapabilityError(cap, sources[0]);
+          members = [only];
+        }
+        if (members.length === 0) throw new UnsupportedCapabilityError(cap, self.clientId);
+        if (members.length > 1) {
+          throw new AmbiguousWriteError(cap, members.map((m) => m.id));
+        }
+        const target = members[0];
+        const group = groups.get(target.id) ?? {
+          client: target.client,
+          items: [],
+          indices: [],
+        };
+        group.items.push(item);
+        group.indices.push(index);
+        groups.set(target.id, group);
+      });
+
+      const subclient = method.split(".")[0] as keyof DataClient;
+      const fnName = method.split(".")[1];
+      const results = new Array<BatchResultItem>(items.length);
+
+      for (const group of groups.values()) {
+        const fn = (group.client[subclient] as Record<string, (...a: unknown[]) => unknown>)[fnName];
+        const response = (await fn.apply(group.client[subclient], [
+          group.items,
+        ])) as BatchResponse;
+        group.indices.forEach((originalIndex, i) => {
+          const item = response.items[i];
+          // A member that returns a short list would otherwise leave holes;
+          // record an explicit failure so `count` stays consistent.
+          results[originalIndex] = item ?? {
+            agent_id: (group.items[i] as { agent_id: string }).agent_id,
+            channel_name: (group.items[i] as { channel_name?: string }).channel_name ?? "",
+            success: false,
+            error: "no result returned for batch item",
+          };
+        });
+      }
+
+      return mergeBatchResponses([
+        { items: results, count: results.length, succeeded: 0, failed: 0 },
+      ]);
+    };
+  }
+
   private guessNonCoreCap(subclient: string): Capability {
     switch (subclient) {
       case "alarms": return "alarms.read";
@@ -496,6 +573,7 @@ export class MultiplexClient implements DataClient {
       },
       putAggregate: self.routedWrite("aggregates.putAggregate", "aggregates.put") as never,
       patchAggregate: self.routedWrite("aggregates.patchAggregate", "aggregates.patch") as never,
+      batchPatchAggregates: self.routedBatchWrite("aggregates.batchPatchAggregates", "aggregates.patch") as never,
       async getAggregateAttachment(agentIdOrId: unknown, ...rest: unknown[]) {
         const { args, sources } = self.splitSourcesOption([agentIdOrId, ...rest]);
         const agentId = self.extractAgentId(args) as string;
@@ -539,6 +617,10 @@ export class MultiplexClient implements DataClient {
       putMessage: self.routedWrite("messages.putMessage", "messages.put") as never,
       patchMessage: self.routedWrite("messages.patchMessage", "messages.put") as never,
       deleteMessage: self.routedWrite("messages.deleteMessage", "messages.delete") as never,
+      batchPostMessages: self.routedBatchWrite("messages.batchPostMessages", "messages.post") as never,
+      batchPatchMessages: self.routedBatchWrite("messages.batchPatchMessages", "messages.put") as never,
+      batchPutMessages: self.routedBatchWrite("messages.batchPutMessages", "messages.put") as never,
+      batchDeleteMessages: self.routedBatchWrite("messages.batchDeleteMessages", "messages.delete") as never,
       getTimeseries: self.makeFanoutFirst("messages.getTimeseries", "messages.timeseries") as never,
       getMessageAttachment: self.makeBlobFanout("messages.getMessageAttachment", "messages.attachment") as never,
       getInvocationLogs: self.makeFanoutFirst("messages.getInvocationLogs", "messages.invocationLogs") as never,
