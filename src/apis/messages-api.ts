@@ -8,6 +8,14 @@ import type {
 import { addTimestampToMessage, generateSnowflakeIdAtTime } from "../utils/snowflake";
 import { resolveChannelArgs } from "./_args";
 import type { DooverRequestOptions } from "../client/request-options";
+import {
+  chunkBatchItems,
+  mergeBatchResponses,
+  type BatchCreateMessageItem,
+  type BatchDeleteMessageItem,
+  type BatchMessageResponse,
+  type BatchUpdateMessageItem,
+} from "../types/batch";
 
 export interface ListMessagesParams {
   before?: string;
@@ -367,6 +375,85 @@ export class MessagesApi {
     return this.rest.get<TLog[]>(
       `/agents/${agentId}/channels/${channelName}/messages/${messageId}/logs`,
     );
+  }
+
+  /**
+   * Create messages across many agents and channels in one request.
+   *
+   * Supply `message_id` per item where you can: the server's create path is
+   * not yet idempotent, so a retry after a lost response can otherwise
+   * duplicate the message and double-count the daily summary.
+   */
+  batchPostMessages(items: BatchCreateMessageItem[]): Promise<BatchMessageResponse>;
+  batchPostMessages(
+    items: BatchCreateMessageItem[],
+    requestOptions: DooverRequestOptions,
+  ): Promise<BatchMessageResponse>;
+  batchPostMessages(...args: unknown[]): Promise<BatchMessageResponse> {
+    return this._batchMessages("POST", args[0] as BatchCreateMessageItem[]);
+  }
+
+  /** Merge-patch messages across many agents and channels in one request. */
+  batchPatchMessages(items: BatchUpdateMessageItem[]): Promise<BatchMessageResponse>;
+  batchPatchMessages(
+    items: BatchUpdateMessageItem[],
+    requestOptions: DooverRequestOptions,
+  ): Promise<BatchMessageResponse>;
+  batchPatchMessages(...args: unknown[]): Promise<BatchMessageResponse> {
+    return this._batchMessages("PATCH", args[0] as BatchUpdateMessageItem[]);
+  }
+
+  /** Replace messages across many agents and channels in one request. */
+  batchPutMessages(items: BatchUpdateMessageItem[]): Promise<BatchMessageResponse>;
+  batchPutMessages(
+    items: BatchUpdateMessageItem[],
+    requestOptions: DooverRequestOptions,
+  ): Promise<BatchMessageResponse>;
+  batchPutMessages(...args: unknown[]): Promise<BatchMessageResponse> {
+    return this._batchMessages("PUT", args[0] as BatchUpdateMessageItem[]);
+  }
+
+  /**
+   * Delete messages across many agents and channels in one request.
+   *
+   * Deletion is not idempotent server-side yet — a retried delete can
+   * decrement the daily summary twice — so retry only items the response
+   * reported as failed.
+   */
+  batchDeleteMessages(items: BatchDeleteMessageItem[]): Promise<BatchMessageResponse>;
+  batchDeleteMessages(
+    items: BatchDeleteMessageItem[],
+    requestOptions: DooverRequestOptions,
+  ): Promise<BatchMessageResponse>;
+  batchDeleteMessages(...args: unknown[]): Promise<BatchMessageResponse> {
+    return this._batchMessages("DELETE", args[0] as BatchDeleteMessageItem[]);
+  }
+
+  /**
+   * Shared driver for the four `/agents/messages` verbs. Chunks to the
+   * server's item ceiling and sends sequentially, so a long list doesn't
+   * reintroduce the burst that batching exists to remove.
+   */
+  private async _batchMessages<T>(
+    method: "POST" | "PATCH" | "PUT" | "DELETE",
+    items: T[],
+  ): Promise<BatchMessageResponse> {
+    if (items.length === 0) {
+      return { items: [], count: 0, succeeded: 0, failed: 0 };
+    }
+    const responses: BatchMessageResponse[] = [];
+    for (const chunk of chunkBatchItems(items)) {
+      // Goes through `request` rather than the verb helpers because DELETE
+      // needs a body, which `rest.delete` does not accept.
+      responses.push(
+        await this.rest.request<BatchMessageResponse>({
+          path: "/agents/messages",
+          method,
+          body: { items: chunk },
+        }),
+      );
+    }
+    return mergeBatchResponses(responses);
   }
 
   createMultipartPayload(

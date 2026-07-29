@@ -64,6 +64,18 @@ export {
   splitRequestOptions,
 } from "./client/request-options";
 export type { DooverRequestOptions } from "./client/request-options";
+export { MAX_BATCH_ITEMS, chunkBatchItems, mergeBatchResponses } from "./types/batch";
+export type {
+  BatchAggregateUpdateItem,
+  BatchAggregateResponse,
+  BatchCreateMessageItem,
+  BatchUpdateMessageItem,
+  BatchDeleteMessageItem,
+  BatchMessageResponse,
+  BatchMessageResultItem,
+  BatchResultItem,
+  BatchResponse,
+} from "./types/batch";
 export type {
   DataClient,
   AgentScope,
