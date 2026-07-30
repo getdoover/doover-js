@@ -101,6 +101,18 @@ export type {
 export { useTurnCredentials } from "./useTurnCredentials";
 
 export {
+  useAgentTokenState,
+  useSetAgentTokenPolicy,
+  useSetAgentAuthLock,
+  useRevokeAgentTokens,
+  useSetRevocationFloor,
+  useCreateAdhocToken,
+  useCreateDeviceToken,
+  agentTokenStateQueryKey,
+} from "./useAgentTokenState";
+export type { UseAgentTokenStateOptions } from "./useAgentTokenState";
+
+export {
   getSharedQueryClient,
   resetSharedQueryClient,
 } from "./sharedQueryClient";

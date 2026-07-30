@@ -681,6 +681,13 @@ export class MultiplexClient implements DataClient {
         const merged = dedupeBy(([] as { agent_id: string }[]).concat(...responses.map((r) => r.results)), (a) => a.agent_id);
         return { results: merged, count: merged.length } as never;
       },
+      getTokenState: self.makeFanoutFirst("agents.getTokenState", "agents.tokenRead") as never,
+      setTokenPolicy: self.routedWrite("agents.setTokenPolicy", "agents.tokenManage") as never,
+      setAuthLock: self.routedWrite("agents.setAuthLock", "agents.tokenManage") as never,
+      revokeAllTokens: self.routedWrite("agents.revokeAllTokens", "agents.tokenManage") as never,
+      setRevocationFloor: self.routedWrite("agents.setRevocationFloor", "agents.tokenManage") as never,
+      createAdhocToken: self.routedWrite("agents.createAdhocToken", "agents.tokenManage") as never,
+      createDeviceToken: self.routedWrite("agents.createDeviceToken", "agents.tokenManage") as never,
     } as AgentsApiLike;
   }
 

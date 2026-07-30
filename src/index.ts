@@ -21,6 +21,14 @@ export type {
 } from "./client/stats";
 
 export { AgentsApi } from "./apis/agents-api";
+export type {
+  AgentTokenState,
+  AgentTokenPolicy,
+  TokenPolicyField,
+  AdhocTokenResponse,
+  DeviceTokenResponse,
+  ResourcePermission,
+} from "./apis/agents-api";
 export { AggregatesApi } from "./apis/aggregates-api";
 export { AlarmsApi } from "./apis/alarms-api";
 export { ChannelsApi } from "./apis/channels-api";
