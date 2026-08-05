@@ -37,6 +37,43 @@ const client = new DooverClient({
 const channels = await client.viewer.getChannels({ agentId: "123" });
 ```
 
+### Cookie usage with session refresh (browser apps behind FusionAuth)
+
+Pass `authServerUrl` — and no token material — to get a `CookieAuth` that can
+renew the session itself. The client then POSTs the hosted-backend refresh
+endpoint (`/app/refresh/` by default) when the access token has expired: before
+a request goes out, and again if one comes back 401, replaying it once.
+
+This exists because the FusionAuth React SDK's auto-refresh is a single
+`setTimeout`. A tab the browser suspends (backgrounded, machine asleep) never
+fires it, so it wakes with a dead access-token cookie and 401s on everything —
+even though the refresh token itself is usually still valid.
+
+```ts
+const client = new DooverClient({
+  dataRestUrl: "https://example.com/api",
+  controlApiUrl: "https://example.com/control",
+  dataWssUrl: "wss://example.com/gateway",
+  authServerUrl: "https://auth.example.com",
+});
+```
+
+`CookieAuth` also exposes the session state apps need for their own lifecycle
+hooks — typically a proactive refresh when a tab regains visibility:
+
+```ts
+const auth = client.auth as CookieAuth;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (!auth.isAccessTokenStale(5 * 60_000)) return;
+  void auth.refreshAccessToken();
+});
+```
+
+Without `authServerUrl`, `CookieAuth` behaves exactly as before: ambient
+cookies, no refresh.
+
 ### Explicit token usage
 
 Pass a token directly to use bearer auth. The client will send `Authorization: Bearer <token>` on every HTTP request and use `credentials: "omit"`.
