@@ -111,6 +111,7 @@ export type {
 
 export { DooverAuth } from "./auth/doover-auth";
 export { CookieAuth } from "./auth/cookie-auth";
+export type { CookieAuthOptions } from "./auth/cookie-auth";
 export { DooverTokenAuth } from "./auth/doover-token-auth";
 export { AuthProfile } from "./auth/auth-profile";
 export type { AuthProfileData } from "./auth/auth-profile";

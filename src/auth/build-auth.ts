@@ -39,14 +39,31 @@ const TOKEN_FIELDS: Array<keyof AuthConfig> = [
 ];
 
 /**
+ * The subset of `TOKEN_FIELDS` that actually implies bearer-token auth.
+ *
+ * `authServerUrl` / `authServerClientId` describe *where* to refresh, not what
+ * we hold: on their own they now configure a refresh-capable `CookieAuth`
+ * (a browser session in an app that knows its auth server), which is far more
+ * useful than the tokenless `DooverTokenAuth` they used to produce — that
+ * instance could only ever throw "missing refreshToken" on first use.
+ */
+const TOKEN_MATERIAL_FIELDS: Array<keyof AuthConfig> = [
+  "token",
+  "tokenExpires",
+  "refreshToken",
+  "refreshTokenId",
+];
+
+/**
  * Build a `DooverAuth` instance from the provided configuration.
  *
  * Rules:
  * 1. If `auth` is provided it is returned as-is.
- * 2. If any token-related field is present, build `DooverTokenAuth`.
+ * 2. If any token material is present, build `DooverTokenAuth`.
  * 3. If `profile` is an `AuthProfile`, use it to seed a `DooverTokenAuth`.
  * 4. If `profile` is a string, look it up via `configManager`.
- * 5. Otherwise fall back to `CookieAuth`.
+ * 5. Otherwise fall back to `CookieAuth`, refresh-capable when
+ *    `authServerUrl` is known.
  */
 export function buildAuth(options: BuildAuthOptions): DooverAuth {
   if (options.auth) {
@@ -82,12 +99,19 @@ export function buildAuth(options: BuildAuthOptions): DooverAuth {
   }
 
   // Determine whether we need token auth.
-  const hasTokenInput = TOKEN_FIELDS.some((k) => options[k] !== undefined);
+  const hasTokenInput = TOKEN_MATERIAL_FIELDS.some(
+    (k) => options[k] !== undefined,
+  );
   const profileHasToken = resolvedProfile?.token != null;
 
   if (!hasTokenInput && !profileHasToken) {
-    // No token data at all — fall back to cookie auth.
-    const auth = new CookieAuth();
+    // No token data at all — fall back to cookie auth, which can still renew
+    // the session when the app has told us where its auth server lives.
+    const auth = new CookieAuth({
+      authServerUrl:
+        options.authServerUrl ?? resolvedProfile?.authServerUrl ?? null,
+      fetchImpl: options.fetchImpl,
+    });
     if (resolvedProfile) {
       auth.attachProfile(resolvedProfile, options.configManager);
     }

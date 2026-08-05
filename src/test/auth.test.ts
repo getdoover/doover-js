@@ -55,6 +55,26 @@ class MemoryProfileStore implements AuthProfileStore {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers: cookie-auth session state
+// ---------------------------------------------------------------------------
+/** An `app.at_exp` cookie string expiring `secondsFromNow` from now. */
+function expiryCookie(secondsFromNow: number): string {
+  return `app.at_exp=${Math.floor(Date.now() / 1000) + secondsFromNow}`;
+}
+
+/** A refresh-capable CookieAuth over a fixed cookie string. */
+function cookieAuth(options: {
+  cookie: string;
+  fetchMock?: sinon.SinonStub;
+}): CookieAuth {
+  return new CookieAuth({
+    authServerUrl: "https://auth.example.com",
+    fetchImpl: (options.fetchMock ?? createFetchMock()) as typeof fetch,
+    cookieReader: () => options.cookie,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // CookieAuth
 // ---------------------------------------------------------------------------
 describe("CookieAuth", () => {
@@ -72,6 +92,167 @@ describe("CookieAuth", () => {
 
   it("ensureReady resolves immediately", async () => {
     const auth = new CookieAuth();
+    await auth.ensureReady(); // should not throw
+  });
+
+  it("does not refresh when no authServerUrl is configured", async () => {
+    const fetchMock = createFetchMock();
+    const auth = new CookieAuth({
+      fetchImpl: fetchMock as typeof fetch,
+      cookieReader: () => expiryCookie(-60),
+    });
+
+    expect(await auth.handleUnauthorized()).to.equal(false);
+    await auth.ensureReady();
+    expect(fetchMock.callCount).to.equal(0);
+  });
+
+  // -- Session inspection ---------------------------------------------------
+
+  it("reads the expiry cookie", () => {
+    const auth = cookieAuth({ cookie: expiryCookie(3600) });
+    expect(auth.isAccessTokenValid()).to.equal(true);
+    expect(auth.isAccessTokenStale()).to.equal(false);
+    expect(auth.getAccessTokenExpiry()).to.be.instanceOf(Date);
+  });
+
+  it("treats an expired cookie as invalid but refreshable", () => {
+    const auth = cookieAuth({ cookie: expiryCookie(-60) });
+    expect(auth.isAccessTokenValid()).to.equal(false);
+    expect(auth.isAccessTokenStale()).to.equal(true);
+  });
+
+  it("reports a near-expiry token as stale while still valid", () => {
+    const auth = cookieAuth({ cookie: expiryCookie(60) });
+    expect(auth.isAccessTokenValid()).to.equal(true);
+    expect(auth.isAccessTokenStale(5 * 60_000)).to.equal(true);
+  });
+
+  it("reports no session when the cookie is absent", () => {
+    const auth = cookieAuth({ cookie: "other=1" });
+    expect(auth.getAccessTokenExpiry()).to.equal(null);
+    expect(auth.isAccessTokenValid()).to.equal(false);
+    // Nothing to refresh — must not read as "stale".
+    expect(auth.isAccessTokenStale()).to.equal(false);
+  });
+
+  it("ignores a non-numeric expiry cookie", () => {
+    const auth = cookieAuth({ cookie: "app.at_exp=garbage" });
+    expect(auth.getAccessTokenExpiry()).to.equal(null);
+    expect(auth.isAccessTokenValid()).to.equal(false);
+  });
+
+  it("honours a custom expiry cookie name", () => {
+    const auth = new CookieAuth({
+      authServerUrl: "https://auth.example.com",
+      accessTokenExpiryCookieName: "custom.exp",
+      cookieReader: () =>
+        `custom.exp=${Math.floor(Date.now() / 1000) + 3600}`,
+    });
+    expect(auth.isAccessTokenValid()).to.equal(true);
+  });
+
+  // -- Refresh behaviour ----------------------------------------------------
+
+  it("refreshes an expired token via the hosted-backend endpoint", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    expect(await auth.handleUnauthorized()).to.equal(true);
+    expect(fetchMock.callCount).to.equal(1);
+    expect(fetchMock.firstCall.args[0]).to.equal(
+      "https://auth.example.com/app/refresh/",
+    );
+    const init = fetchMock.firstCall.args[1] as RequestInit;
+    expect(init.method).to.equal("POST");
+    expect(init.credentials).to.equal("include");
+  });
+
+  it("honours a custom refresh path", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = new CookieAuth({
+      authServerUrl: "https://auth.example.com",
+      refreshPath: "/proxy/renew",
+      fetchImpl: fetchMock as typeof fetch,
+      cookieReader: () => expiryCookie(-60),
+    });
+
+    await auth.refreshAccessToken();
+    expect(fetchMock.firstCall.args[0]).to.equal(
+      "https://auth.example.com/proxy/renew",
+    );
+  });
+
+  it("reports failure when the refresh endpoint rejects", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({}, { status: 400 }),
+    );
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    expect(await auth.handleUnauthorized()).to.equal(false);
+  });
+
+  it("reports failure when the refresh request throws", async () => {
+    const fetchMock = sinon.stub().rejects(new Error("offline"));
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    expect(await auth.handleUnauthorized()).to.equal(false);
+  });
+
+  it("skips the refresh call when there is no session cookie", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = cookieAuth({ cookie: "", fetchMock });
+
+    expect(await auth.handleUnauthorized()).to.equal(false);
+    expect(fetchMock.callCount).to.equal(0);
+  });
+
+  it("collapses concurrent refreshes onto one request", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    const results = await Promise.all([
+      auth.handleUnauthorized(),
+      auth.handleUnauthorized(),
+      auth.handleUnauthorized(),
+    ]);
+
+    expect(results).to.deep.equal([true, true, true]);
+    expect(fetchMock.callCount).to.equal(1);
+  });
+
+  it("reuses a recent failure instead of retrying in a loop", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({}, { status: 400 }),
+    );
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    expect(await auth.handleUnauthorized()).to.equal(false);
+    expect(await auth.handleUnauthorized()).to.equal(false);
+    expect(await auth.handleUnauthorized()).to.equal(false);
+    expect(fetchMock.callCount).to.equal(1);
+  });
+
+  it("ensureReady refreshes an expired token before the request goes out", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    await auth.ensureReady();
+    expect(fetchMock.callCount).to.equal(1);
+  });
+
+  it("ensureReady leaves a valid token alone", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = cookieAuth({ cookie: expiryCookie(30), fetchMock });
+
+    await auth.ensureReady();
+    expect(fetchMock.callCount).to.equal(0);
+  });
+
+  it("ensureReady does not reject when the refresh fails", async () => {
+    const fetchMock = sinon.stub().rejects(new Error("offline"));
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
     await auth.ensureReady(); // should not throw
   });
 });
@@ -369,6 +550,27 @@ describe("buildAuth", () => {
     expect(buildAuth({})).to.be.instanceOf(CookieAuth);
   });
 
+  it("builds a refresh-capable CookieAuth from authServerUrl alone", async () => {
+    const fetchMock = createFetchMock(() => createJsonResponse({}));
+    const auth = buildAuth({
+      authServerUrl: "https://auth.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+
+    // authServerUrl says where to refresh; it is not token material, so this
+    // stays cookie auth rather than becoming a tokenless DooverTokenAuth.
+    expect(auth).to.be.instanceOf(CookieAuth);
+    expect(await auth.handleUnauthorized()).to.equal(false); // no session cookie
+  });
+
+  it("still builds DooverTokenAuth when token material accompanies authServerUrl", () => {
+    const auth = buildAuth({
+      authServerUrl: "https://auth.example.com",
+      refreshToken: "rt",
+    });
+    expect(auth).to.be.instanceOf(DooverTokenAuth);
+  });
+
   it("builds DooverTokenAuth when token is provided", () => {
     const auth = buildAuth({ token: "tok" });
     expect(auth).to.be.instanceOf(DooverTokenAuth);
@@ -619,6 +821,53 @@ describe("RestClient auth integration", () => {
     const headers = init?.headers as Headers;
     expect(headers.get("Authorization")).to.equal(null);
     expect(init?.credentials).to.equal("include");
+  });
+
+  it("refreshes and replays a 401 with refresh-capable cookie auth", async () => {
+    let itemsCalls = 0;
+    const fetchMock = createFetchMock((url) => {
+      if (url === "https://auth.example.com/app/refresh/") {
+        return createJsonResponse({});
+      }
+      itemsCalls += 1;
+      // First attempt uses the dead cookie; the replay succeeds.
+      return itemsCalls === 1
+        ? createJsonResponse({ detail: "expired" }, { status: 401 })
+        : createJsonResponse({ items: [] });
+    });
+    const auth = cookieAuth({ cookie: expiryCookie(-60), fetchMock });
+
+    const client = new RestClient(
+      {
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "wss://ws.example.com",
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      auth,
+    );
+
+    const result = await client.get("/items");
+
+    expect(result).to.deep.equal({ items: [] });
+    expect(itemsCalls).to.equal(2);
+  });
+
+  it("surfaces the 401 when cookie auth cannot refresh", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({ detail: "expired" }, { status: 401 }),
+    );
+    const client = new RestClient(
+      {
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "wss://ws.example.com",
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      new CookieAuth(),
+    );
+
+    await expect(client.get("/items")).to.be.rejected;
   });
 
   it("uses credentials: include when no auth is provided (backward compat)", async () => {
