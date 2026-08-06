@@ -119,8 +119,9 @@ export interface UseChannelMessagesResult<TData>
 
 /**
  * Paginated infinite query over `DooverDataProvider.getMessages`, with live
- * `messageCreate` pushes prepended/appended to the newest page. The "next"
- * page fetches older messages (cursor = oldest-loaded message id).
+ * `messageCreate` pushes are appended to the newest page and `messageUpdate`
+ * pushes replace matching cached messages. The "next" page fetches older
+ * messages (cursor = oldest-loaded message id).
  */
 export function useChannelMessages<TData = unknown>(
   identifier: ChannelIdentifier,
@@ -193,7 +194,45 @@ export function useChannelMessages<TData = unknown>(
     [queryClient, agentId, channelName, fields?.join(","), sources?.join(",")],
   );
 
-  useChannelSubscription(liveUpdates ? identifier : undefined, { onMessage });
+  const onMessageUpdate = useCallback(
+    (message: MessageStructure) => {
+      // A filtered stream must not accept an update that does not belong to it.
+      // Newly qualifying messages are left for a refetch because inserting one
+      // into an arbitrary cursor page could invalidate that page's boundaries.
+      if (fields && fields.length > 0) {
+        const data = message.data as unknown;
+        if (
+          !data ||
+          typeof data !== "object" ||
+          !fields.some((field) => field in data)
+        ) {
+          return;
+        }
+      }
+
+      if (rangeCacheable) store.recordUpdate(message);
+      queryClient.setQueryData<InfiniteData<Page<TData>>>(key, (current) => {
+        if (!current) return current;
+        let changed = false;
+        const typed = message as MessageStructure<TData>;
+        const pages = current.pages.map((page) =>
+          page.map((item) => {
+            if (item.id !== typed.id) return item;
+            changed = true;
+            return typed;
+          }),
+        );
+        return changed ? { ...current, pages } : current;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, agentId, channelName, fields?.join(","), sources?.join(",")],
+  );
+
+  useChannelSubscription(liveUpdates ? identifier : undefined, {
+    onMessage,
+    onMessageUpdate,
+  });
 
   const query = useInfiniteQuery<Page<TData>>({
     queryKey: key,
