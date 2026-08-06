@@ -1,7 +1,20 @@
+/** Doover's snowflake epoch: 2025-01-01T00:00:00Z. Nothing predates it. */
+const SNOWFLAKE_EPOCH_MS = 1735689600000;
+
+/**
+ * Snowflake id for a point in time, floored at the epoch.
+ *
+ * Ids are unsigned, so a pre-epoch time has no id to generate. Returning the
+ * negative arithmetic result produced a value the API rejects outright
+ * ("expected a snowflake id value"), failing the whole request; `0` is the
+ * oldest addressable id, which is what a caller reaching further back wants.
+ */
 export function generateSnowflakeIdAtTime(time: { valueOf(): number }) {
-  const offset = 1735689600000;
-  const bigTime = BigInt(time.valueOf() - offset);
-  const bigId = bigTime << 22n;
+  const offsetMs = time.valueOf() - SNOWFLAKE_EPOCH_MS;
+  if (Number.isNaN(offsetMs)) {
+    throw new TypeError("generateSnowflakeIdAtTime received an invalid time");
+  }
+  const bigId = BigInt(Math.max(0, offsetMs)) << 22n;
   return bigId.toString();
 }
 
