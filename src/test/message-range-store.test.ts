@@ -128,6 +128,25 @@ describe("ChannelRangeStore", () => {
     expect(ids(store.read(idAt(0), 10))).to.deep.equal(ids(page));
   });
 
+  it("replaces an updated message without changing range coverage", () => {
+    const page = makeMessages(5, 20);
+    store.record({ before: idAt(0), limit: 5, page });
+    const before = store.snapshot();
+    const updated = {
+      ...page[2],
+      data: { i: 2, analysed_by: "detector" },
+      attachments: [{ id: "updated-image" }],
+    } as unknown as MessageStructure;
+
+    store.recordUpdate(updated);
+
+    const read = store.read(idAt(0), 5)!;
+    expect(read[2]).to.equal(updated);
+    expect(ids(read)).to.deep.equal(ids(page));
+    expect(store.snapshot().map(({ lo, hi, atStart }) => ({ lo, hi, atStart })))
+      .to.deep.equal(before.map(({ lo, hi, atStart }) => ({ lo, hi, atStart })));
+  });
+
   it("keeps disjoint ranges apart rather than claiming the gap", () => {
     const ancient = makeMessages(5, 500);
     const recent = makeMessages(5, 20);

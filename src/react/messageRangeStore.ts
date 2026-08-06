@@ -118,6 +118,18 @@ export class ChannelRangeStore {
   }
 
   /**
+   * Replace a message already held by one or more proven ranges. MessageUpdate
+   * carries the complete server representation, so both data and attachments
+   * supersede the cached create-time copy without changing range coverage.
+   */
+  recordUpdate(message: MessageStructure): void {
+    for (const segment of this.segments) {
+      const index = segment.messages.findIndex((item) => item.id === message.id);
+      if (index >= 0) segment.messages[index] = message;
+    }
+  }
+
+  /**
    * Stop trusting the live feed to extend coverage — call when the socket drops.
    * Messages sent while disconnected would leave a hole, so segments go back to
    * proving coverage by fetching.

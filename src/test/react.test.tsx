@@ -271,7 +271,7 @@ describe("react bindings", () => {
     expect(cached).to.deep.include({ data: { y: 2 }, attachments: [] });
   });
 
-  it("useChannelMessages paginates and prepends on live messageCreate", async () => {
+  it("useChannelMessages applies live creates and updates", async () => {
     const oldId = generateSnowflakeIdAtTime(new Date("2025-12-31T23:59:00.000Z"));
     const newId = generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:01.000Z"));
     const liveId = generateSnowflakeIdAtTime(new Date("2026-01-01T00:00:02.000Z"));
@@ -345,6 +345,30 @@ describe("react bindings", () => {
         liveId,
       ]),
     );
+
+    await act(async () => {
+      MockWebSocket.instances[0].receive({
+        op: 0,
+        t: "MessageUpdate",
+        d: {
+          message: {
+            id: newId,
+            author_id: "u1",
+            channel: { agent_id: "a1", name: "notes" },
+            data: { v: 22, analysed_by: "detector" },
+            attachments: [{ id: "analysed-image" }],
+          },
+          request_data: {},
+        },
+      });
+    });
+
+    await waitFor(() => {
+      const updated = result.current.messages.find((message) => message.id === newId);
+      expect(updated?.data).to.deep.equal({ v: 22, analysed_by: "detector" });
+      expect(updated?.attachments).to.have.length(1);
+      expect(updated?.attachments?.[0]).to.deep.include({ id: "analysed-image" });
+    });
   });
 
   it("useChannelMessage seeds via REST and patches on MessageUpdate", async () => {
