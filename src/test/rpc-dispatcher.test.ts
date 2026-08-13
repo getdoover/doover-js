@@ -269,3 +269,102 @@ describe("RpcDispatcher stats integration", () => {
     expect(snap.rpc.peakPendingRpcs).to.equal(1);
   });
 });
+
+describe("RpcDispatcher pending timeout", () => {
+  const setup = (id: string) => {
+    const gw = makeFakeGateway();
+    const messages = makeFakeMessagesApi();
+    messages.setNextId(id);
+    const dispatcher = new RpcDispatcher(
+      gw as unknown as GatewayClient,
+      messages as unknown as MessagesApi,
+    );
+    return { gw, dispatcher, channel: { agent_id: "a1", name: "c1" } as ChannelRef };
+  };
+
+  it("replaces the initial timeout once the device answers", async () => {
+    const { gw, dispatcher, channel } = setup("rpc-p1");
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { timeoutMs: 10, pendingTimeoutMs: 200 },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+
+    // Acknowledged before the 10ms deadline: the command must survive well past
+    // it, because the device has proven it is working.
+    gw.emitMessageUpdate(
+      rpcMessage("rpc-p1", channel, { code: "acknowledged", message: { timestamp: 1 } }, {}),
+    );
+    await new Promise<void>((r) => setTimeout(r, 60));
+    gw.emitMessageUpdate(
+      rpcMessage("rpc-p1", channel, { code: "success" }, {}, { ok: true }),
+    );
+
+    expect(await promise).to.deep.equal({ ok: true });
+  });
+
+  it("re-arms the pending budget on every progress report", async () => {
+    const { gw, dispatcher, channel } = setup("rpc-p2");
+    const promise = dispatcher.send<object, object, { text: string }>(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { timeoutMs: 10, pendingTimeoutMs: 50 },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+
+    // Four reports, each well inside the 50ms budget but cumulatively past it.
+    for (let i = 0; i < 4; i += 1) {
+      gw.emitMessageUpdate(
+        rpcMessage("rpc-p2", channel, { code: "pending", message: { text: `step ${i}` } }, {}),
+      );
+      await new Promise<void>((r) => setTimeout(r, 30));
+    }
+    gw.emitMessageUpdate(rpcMessage("rpc-p2", channel, { code: "success" }, {}, { ok: 1 }));
+
+    expect(await promise).to.deep.equal({ ok: 1 });
+  });
+
+  it("fails a device that answers and then goes quiet", async () => {
+    const { gw, dispatcher, channel } = setup("rpc-p3");
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { timeoutMs: 1000, pendingTimeoutMs: 20 },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    gw.emitMessageUpdate(
+      rpcMessage("rpc-p3", channel, { code: "acknowledged", message: { timestamp: 1 } }, {}),
+    );
+
+    let caught: Error | undefined;
+    try {
+      await promise;
+    } catch (e) {
+      caught = e as Error;
+    }
+    // Distinct from "RPC timed out": it answered, then stopped.
+    expect(caught?.message).to.equal("Device stopped reporting progress");
+  });
+
+  it("keeps the flat deadline when no pending budget is given", async () => {
+    const { gw, dispatcher, channel } = setup("rpc-p4");
+    const promise = dispatcher.send(
+      { agentId: "a1", channelName: "c1" },
+      { method: "do", request: {} },
+      { timeoutMs: 20 },
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    gw.emitMessageUpdate(
+      rpcMessage("rpc-p4", channel, { code: "acknowledged", message: { timestamp: 1 } }, {}),
+    );
+
+    let caught: Error | undefined;
+    try {
+      await promise;
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught?.message).to.equal("RPC timed out");
+  });
+});

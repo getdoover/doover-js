@@ -169,9 +169,18 @@ export interface DataSeries {
 }
 
 /**
- * Lifecycle status for an RPC. `pending` carries arbitrary intermediate
- * payloads (progress updates) emitted by the server while the request is
- * in flight.
+ * Lifecycle status for an RPC.
+ *
+ * `sent` is written by the sender; the other non-terminal codes come from the
+ * device handling the request. `acknowledged` means it has picked the request
+ * up, and `pending` carries arbitrary intermediate payloads (progress updates)
+ * it emits while still working — by convention a `{ text }` summary, plus
+ * whatever structured fields the handler wants alongside it. Both prove the
+ * device is alive, so consumers should treat either as a reason to extend how
+ * long they are willing to wait (see `SendRpcOptions.pendingTimeoutMs`), never
+ * as a completion.
+ *
+ * `success` and `error` are the only terminal codes.
  */
 export type RpcStatus<TPending = undefined> =
   | { code: "awaiting_confirmation" }

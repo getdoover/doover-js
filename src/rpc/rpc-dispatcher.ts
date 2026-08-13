@@ -14,7 +14,25 @@ import { DooverRpcError } from "./errors";
 export interface SendRpcOptions<TPending = undefined> {
   onStatus?: (status: RpcStatus<TPending>) => void;
   signal?: AbortSignal;
+  /**
+   * How long to wait to hear from the device at all. A healthy device answers
+   * within seconds however long the work then takes, so keep this short and
+   * use `pendingTimeoutMs` for the work itself.
+   */
   timeoutMs?: number;
+  /**
+   * How long the command may then stay in flight once the device has answered
+   * it — acknowledged it, or reported progress. Re-armed on every subsequent
+   * status update, so a device that keeps reporting keeps its command alive,
+   * while one that answers and then dies still fails. Without this, a handler
+   * that legitimately runs longer than `timeoutMs` is killed mid-flight.
+   */
+  pendingTimeoutMs?: number;
+}
+
+/** Whether the device has answered this command, rather than only received it. */
+function hasDeviceAnswered(status: RpcStatus<unknown>): boolean {
+  return status.code === "acknowledged" || status.code === "pending";
 }
 
 interface ChannelIdentifierLike {
@@ -33,6 +51,7 @@ interface PendingRpc<TPending = unknown> {
   timer?: ReturnType<typeof setTimeout>;
   abortListener?: () => void;
   signal?: AbortSignal;
+  pendingTimeoutMs?: number;
 }
 
 interface ChannelRefEntry {
@@ -96,6 +115,7 @@ export class RpcDispatcher {
             channelKey,
             channel: channelRef,
             startedAt,
+            pendingTimeoutMs: options?.pendingTimeoutMs,
           };
 
           if (options?.signal) {
@@ -161,6 +181,18 @@ export class RpcDispatcher {
       this.settle(msg.id, "success", msg.data.response);
     } else if (status.code === "error") {
       this.settle(msg.id, "error", undefined, new DooverRpcError(status, pending.request));
+    } else if (hasDeviceAnswered(status) && pending.pendingTimeoutMs !== undefined) {
+      // The device is alive and working: swap the "no response" deadline for
+      // the pending budget, and re-arm it on every report that follows.
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.timer = setTimeout(() => {
+        this.settle(
+          msg.id,
+          "timeout",
+          undefined,
+          new Error("Device stopped reporting progress"),
+        );
+      }, pending.pendingTimeoutMs);
     }
   }
 
