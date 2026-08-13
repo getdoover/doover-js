@@ -49,6 +49,13 @@ export interface UseSendRpcOptions {
    * `["doover", "agent", agentId, "channel", channelName, "rpc", method]`.
    */
   mutationKey?: readonly unknown[];
+  /** How long to wait to hear from the device at all. See `SendRpcOptions`. */
+  timeoutMs?: number;
+  /**
+   * How long the command may then stay in flight once the device has answered,
+   * re-armed on every progress report. See `SendRpcOptions`.
+   */
+  pendingTimeoutMs?: number;
 }
 
 export interface UseSendRpcResult<TRequest, TResponse, TPending>
@@ -230,6 +237,12 @@ export function useSendRpc<
         rpcRequest,
         {
           onStatus: (status) => appendStatus(commandId, status),
+          ...(options.timeoutMs !== undefined
+            ? { timeoutMs: options.timeoutMs }
+            : {}),
+          ...(options.pendingTimeoutMs !== undefined
+            ? { pendingTimeoutMs: options.pendingTimeoutMs }
+            : {}),
         },
       );
     },
