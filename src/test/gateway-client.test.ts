@@ -449,4 +449,94 @@ describe("GatewayClient", () => {
 
     randomStub.restore();
   });
+
+  describe("an unusable dataWssUrl", () => {
+    // A relative or empty value is resolved against the document by the
+    // WebSocket constructor, so the gateway silently points at whatever page
+    // is open, gets that page's HTML and a 200 back, and retries against it
+    // forever. Refusing it names the cause once instead.
+    it("refuses an empty one rather than resolving against the page", async () => {
+      const client = new GatewayClient({
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "",
+        organisationId: null,
+        sharing: "none",
+        impersonateUserStorageKey: "doover:test",
+      });
+
+      await expect(client.connect()).to.be.rejectedWith(/dataWssUrl is empty/);
+      expect(MockWebSocket.instances).to.have.length(0);
+    });
+
+    it("refuses a relative one", async () => {
+      const client = new GatewayClient({
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "/widget/some_widget?app_key=k",
+        organisationId: null,
+        sharing: "none",
+        impersonateUserStorageKey: "doover:test",
+      });
+
+      await expect(client.connect()).to.be.rejectedWith(/not the relative value/);
+      expect(MockWebSocket.instances).to.have.length(0);
+    });
+
+    it("refuses a scheme a WebSocket cannot be opened on", async () => {
+      const client = new GatewayClient({
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "file:///etc/hosts",
+        organisationId: null,
+        sharing: "none",
+        impersonateUserStorageKey: "doover:test",
+      });
+
+      await expect(client.connect()).to.be.rejectedWith(/must be ws\(s\):\/\/ or http\(s\)/);
+      expect(MockWebSocket.instances).to.have.length(0);
+    });
+
+    it("reports it through wssError once when a subscribe connects in the background", async () => {
+      // `subscribe` is fire-and-forget, so the fault has to surface as an event
+      // rather than a rejected promise nobody holds — and only once, because
+      // reconnects are scheduled on socket close and no socket was ever opened.
+      const client = new GatewayClient({
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "",
+        organisationId: null,
+        sharing: "none",
+        impersonateUserStorageKey: "doover:test",
+      });
+
+      const errors: string[] = [];
+      client.on("wssError", (event) => errors.push(String(event.message)));
+
+      client.subscribe({ agent_id: "111", name: "tag_values" });
+
+      // The rejection travels connect -> openSocket -> catch, which is several
+      // microtasks; draining them is not the same as advancing fake timers.
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
+
+      expect(errors).to.have.length(1);
+      expect(errors[0]).to.match(/dataWssUrl is empty/);
+      expect(MockWebSocket.instances).to.have.length(0);
+    });
+
+    it("still accepts an absolute http(s) URL, which WebSocket maps itself", async () => {
+      const client = new GatewayClient({
+        dataRestUrl: "https://api.example.com",
+        controlApiUrl: "https://control.example.com",
+        dataWssUrl: "https://ws.example.com/gateway",
+        organisationId: null,
+        sharing: "none",
+        impersonateUserStorageKey: "doover:test",
+      });
+
+      await client.connect();
+      expect(MockWebSocket.instances).to.have.length(1);
+      expect(MockWebSocket.instances[0].url).to.equal("https://ws.example.com/gateway");
+    });
+  });
 });
