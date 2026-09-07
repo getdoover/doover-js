@@ -21,6 +21,9 @@ type ListenerSet<K extends keyof GatewayListenerMap> = Set<GatewayListenerMap[K]
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 30_000;
 
+/** Schemes a WebSocket can be opened on — it maps http(s) to ws(s) itself. */
+const ALLOWED_WSS_PROTOCOLS = new Set(["ws:", "wss:", "http:", "https:"]);
+
 export interface ChannelHandlers {
   onMessage?: (msg: MessageStructure) => void;
   onMessageUpdate?: (msg: MessageStructure, requestData?: JSONValue) => void;
@@ -32,6 +35,47 @@ interface ChannelRegistryEntry {
   /** Bound listeners we attached to `this.on(...)` so we can remove them. */
   cleanup: Array<() => void>;
 }
+
+/**
+ * Reject a `dataWssUrl` that cannot address a gateway.
+ *
+ * An empty or relative value is the dangerous case, because nothing rejects it
+ * on its own: the WebSocket constructor resolves a relative URL against the
+ * document and maps https to wss, so in a browser `new WebSocket("")` silently
+ * points the gateway at whatever page is open. That page answers the upgrade
+ * with its own HTML and a 200, the browser reports "the server did not accept
+ * the WebSocket handshake", and the client retries against it forever — a loop
+ * that looks like a server problem and never names the real cause. It reached
+ * a kiosk panel that way, from a client built with `dataWssUrl: ""` because the
+ * build it was bundled into defined no env for it.
+ *
+ * Absolute http(s) is allowed as well as ws(s), since the WebSocket
+ * constructor maps those itself and existing configs rely on it.
+ */
+function assertAbsoluteWssUrl(url: string): void {
+  if (typeof url !== "string" || url.trim() === "") {
+    throw new Error(
+      "dataWssUrl is empty, so a gateway connection would resolve against the " +
+        "current page rather than a gateway; set it to an absolute ws(s):// URL",
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      `dataWssUrl must be an absolute ws(s):// URL, not the relative value ${JSON.stringify(url)}`,
+    );
+  }
+
+  if (!ALLOWED_WSS_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error(
+      `dataWssUrl must be ws(s):// or http(s)://, not ${parsed.protocol}//`,
+    );
+  }
+}
+
 
 export class GatewayClient {
   private socket: WebSocket | null = null;
@@ -112,6 +156,11 @@ export class GatewayClient {
   }
 
   private async openSocket(): Promise<void> {
+    // Before auth, before any socket: a URL that cannot address a gateway is a
+    // configuration fault, and finding out now costs one error instead of an
+    // endless handshake failure that reads like a broken server.
+    assertAbsoluteWssUrl(this.config.dataWssUrl);
+
     if (this.auth) {
       await this.auth.ensureReady();
     }
