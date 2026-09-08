@@ -320,11 +320,24 @@ describe("API clients", () => {
     await alarms.createAlarm("a1", "c1", { name: "a", key: "x", operator: "gt", value: 1 });
     await alarms.getAlarm("a1", "c1", "alarm");
     await alarms.putAlarm("a1", "c1", "alarm", { name: "a", key: "x", operator: "gt", value: 1 });
+    // A rate alarm states its condition with rate_threshold/rate_window_ms and
+    // must leave `value` unset.
+    await alarms.createAlarm("a1", "c1", {
+      name: "rising",
+      key: "level",
+      operator: "gt",
+      rate_threshold: 0.05,
+      rate_window_ms: 600_000,
+      topic_name: "level-rising",
+      notification_policy: "opt-in",
+      messages: { alarm: { notify: true, text: "Level rising fast" } },
+    });
     await alarms.patchAlarm("a1", "c1", "alarm", { enabled: false });
+    await alarms.patchAlarm("a1", "c1", "alarm", { messages: { ok: { notify: false } } });
     await alarms.deleteAlarm("a1", "c1", "alarm");
 
     expect(await aggregateBlob.text()).to.equal("agg");
-    expect(fetchMock.callCount).to.equal(10);
+    expect(fetchMock.callCount).to.equal(12);
   });
 
   it("covers connections and notifications methods", async () => {
@@ -347,6 +360,7 @@ describe("API clients", () => {
 
     await notifications.getAgentNotifications("a1");
     await notifications.getAgentNotificationEndpoints("a1", "browser");
+    await notifications.getAgentNotificationEndpointSummaries("a1");
     await notifications.createNotificationEndpoint("a1", {
       name: "browser",
       type: 3,
@@ -363,6 +377,11 @@ describe("API clients", () => {
       topic_filter: ["*"],
     });
     await notifications.getAgentDefaultNotificationSubscriptions("a1", "a2");
+    await notifications.updateDefaultNotificationSubscription("a1", "a2", {
+      severity: 5,
+      topic_filter: ["^dev/alarms/default/[^/]+/triggered$"],
+      topic_filter_mode: "regex",
+    });
     await notifications.deleteDefaultNotificationSubscription("a1", "a2");
     await notifications.updateNotificationSubscription("a1", "s1", { severity: 4 });
     await notifications.deleteNotificationSubscription("a1", "s1");
@@ -376,7 +395,23 @@ describe("API clients", () => {
     });
     await notifications.getWebPushPublicKey();
 
-    expect(fetchMock.callCount).to.equal(21);
+    const summaryCall = fetchMock
+      .getCalls()
+      .find((call) =>
+        (call.args[0] as string).endsWith("/agents/a1/notifications/endpoints/summary"),
+      );
+    expect(summaryCall).to.not.equal(undefined);
+
+    const defaultPatch = fetchMock
+      .getCalls()
+      .find((call) =>
+        (call.args[0] as string).endsWith(
+          "/agents/a1/notifications/subscriptions/default/a2",
+        ) && (call.args[1] as RequestInit).method === "PATCH",
+      );
+    expect(defaultPatch).to.not.equal(undefined);
+
+    expect(fetchMock.callCount).to.equal(23);
   });
 
   it("covers permissions, processors, and turn methods", async () => {

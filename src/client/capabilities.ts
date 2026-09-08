@@ -41,7 +41,7 @@ export type Capability =
   // rpc
   | "rpc.send"
   // alarms / connections / notifications / permissions / processors / turn / users
-  | "alarms.read" // listAlarms, getAlarm
+  | "alarms.read" // listAgentAlarms, listAlarms, getAlarm
   | "alarms.write" // createAlarm, putAlarm, patchAlarm, deleteAlarm
   | "connections.read" // all ConnectionsApi reads
   | "connections.write" // syncConnection

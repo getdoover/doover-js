@@ -32,6 +32,7 @@ interface MethodSpec { cap: Capability; kind: MethodKind; agentScoped: boolean }
 /** "<subclient>.<method>" → spec. Drives the generic non-core facades. */
 const NONCORE_METHODS: Record<string, MethodSpec> = {
   // alarms
+  "alarms.listAgentAlarms": { cap: "alarms.read", kind: "read-fanout-first", agentScoped: true },
   "alarms.listAlarms": { cap: "alarms.read", kind: "read-fanout-first", agentScoped: true },
   "alarms.getAlarm": { cap: "alarms.read", kind: "read-fanout-first", agentScoped: true },
   "alarms.createAlarm": { cap: "alarms.write", kind: "write-route", agentScoped: true },
@@ -48,6 +49,7 @@ const NONCORE_METHODS: Record<string, MethodSpec> = {
   // notifications (reads)
   "notifications.getAgentNotifications": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
   "notifications.getAgentNotificationEndpoints": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
+  "notifications.getAgentNotificationEndpointSummaries": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
   "notifications.getAgentNotificationSubscriptions": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
   "notifications.getAgentDefaultNotificationSubscriptions": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
   "notifications.getAgentNotificationSubscribers": { cap: "notifications.read", kind: "read-fanout-first", agentScoped: true },
@@ -58,6 +60,7 @@ const NONCORE_METHODS: Record<string, MethodSpec> = {
   "notifications.deleteNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
   "notifications.testNotificationEndpoint": { cap: "notifications.write", kind: "write-route", agentScoped: true },
   "notifications.createNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
+  "notifications.updateDefaultNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
   "notifications.deleteDefaultNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
   "notifications.updateNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },
   "notifications.deleteNotificationSubscription": { cap: "notifications.write", kind: "write-route", agentScoped: true },

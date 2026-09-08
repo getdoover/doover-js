@@ -1,9 +1,20 @@
 import type { RestClient } from "../http/rest-client";
 import type { Alarm, CreateAlarmRequest, PatchAlarmRequest } from "../types/openapi";
-import { resolveChannelArgs } from "./_args";
+import { resolveAgentArgs, resolveChannelArgs } from "./_args";
 
 export class AlarmsApi {
   constructor(private readonly rest: RestClient) {}
+
+  /** Every alarm on every channel of an agent the caller can see. */
+  listAgentAlarms(agentId: string): Promise<Alarm[]>;
+  listAgentAlarms(identifier: { agentId: string }): Promise<Alarm[]>;
+  listAgentAlarms(...args: unknown[]): Promise<Alarm[]> {
+    const { agentId } = resolveAgentArgs<undefined>(args);
+    return this._listAgentAlarms(agentId);
+  }
+  private _listAgentAlarms(agentId: string) {
+    return this.rest.get<Alarm[]>(`/agents/${agentId}/alarms`);
+  }
 
   listAlarms(agentId: string, channelName: string): Promise<Alarm[]>;
   listAlarms(identifier: { agentId: string; channelName: string }): Promise<Alarm[]>;

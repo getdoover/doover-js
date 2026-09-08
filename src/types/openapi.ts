@@ -2,6 +2,8 @@ import type {
   AgentAggregate,
   AgentPermission,
   Alarm,
+  AlarmMessages,
+  AlarmStateMessage,
   Aggregate,
   Channel,
   ConnectionDetails,
@@ -10,7 +12,9 @@ import type {
   DataSeries,
   MessageStructure,
   NotificationEndpoint,
+  NotificationEndpointSummary,
   NotificationSubscription,
+  NotificationTopicFilterMode,
   ResourcePermission,
   TurnCredential,
 } from "./common";
@@ -19,6 +23,8 @@ export type {
   AgentAggregate,
   AgentPermission,
   Alarm,
+  AlarmMessages,
+  AlarmStateMessage,
   Aggregate,
   Channel,
   ConnectionDetails,
@@ -27,7 +33,9 @@ export type {
   DataSeries,
   MessageStructure,
   NotificationEndpoint,
+  NotificationEndpointSummary,
   NotificationSubscription,
+  NotificationTopicFilterMode,
   ResourcePermission,
   TurnCredential,
 };
@@ -75,6 +83,10 @@ export interface NotificationDataResponse {
 
 export interface NotificationEndpointsResponse {
   endpoints: NotificationEndpoint[];
+}
+
+export interface NotificationEndpointSummariesResponse {
+  endpoints: NotificationEndpointSummary[];
 }
 
 export interface NotificationSubscriptionsResponse {
@@ -150,11 +162,31 @@ export interface CreateAlarmRequest {
   enabled?: boolean;
   key: string;
   operator: Alarm["operator"];
-  value: unknown;
+  /**
+   * The threshold to compare against. Required for a threshold alarm, and
+   * must be left out entirely for a rate alarm — which states its condition
+   * with `rate_threshold` instead.
+   */
+  value?: unknown;
   expiry_mins?: number | null;
   alarm_pending_ms?: number | null;
+  /** Stable slug used in notification topics. Derived from `name` if absent. */
+  topic_name?: string;
+  notification_policy?: Alarm["notification_policy"];
+  /**
+   * Units per second, judged over at least `rate_window_ms`. Setting the pair
+   * makes this a rate-of-change alarm; they must be set together.
+   */
+  rate_threshold?: number | null;
+  rate_window_ms?: number | null;
+  messages?: AlarmMessages | null;
 }
 
+/**
+ * Every field is optional; each is merged rather than replaced. `messages` is
+ * merged state by state and field by field, so `{messages: {ok: {notify:
+ * false}}}` leaves the stored text alone, and an explicit `null` clears.
+ */
 export interface PatchAlarmRequest extends Partial<CreateAlarmRequest> {}
 
 export interface CreateEndpointRequest {
@@ -176,11 +208,14 @@ export interface CreateNotificationSubscriptionRequest {
   endpoint_id?: string | null;
   severity: number;
   topic_filter: string[];
+  /** Defaults to `exact` server-side when absent. */
+  topic_filter_mode?: NotificationTopicFilterMode;
 }
 
 export interface UpdateNotificationSubscriptionRequest {
   severity?: number;
   topic_filter?: string[];
+  topic_filter_mode?: NotificationTopicFilterMode;
 }
 
 export interface UpdateMeWebPushEndpointRequest {

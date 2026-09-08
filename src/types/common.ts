@@ -57,6 +57,10 @@ export interface Alarm {
   id: string;
   name: string;
   description: string;
+  /** Channel the alarm lives on — set on every alarm the REST API returns. */
+  channel_name?: string;
+  topic_name?: string;
+  notification_policy?: "default" | "opt-in";
   enabled: boolean;
   key: string;
   operator: AlarmOperator;
@@ -65,7 +69,30 @@ export interface Alarm {
   expiry_mins: number | null;
   entered_state_ts: number;
   alarm_pending_ms: number | null;
+  rate_threshold?: number | null;
+  rate_window_ms?: number | null;
+  rate_baseline_value?: number | null;
+  rate_baseline_ts?: number | null;
+  messages?: AlarmMessages | null;
   __source?: SourceProvenance;
+}
+
+/**
+ * Per-transition notification override. `notify` and `text` are independent:
+ * turning notifications off keeps whatever wording was set, and `text: null`
+ * means "use the auto-generated message".
+ */
+export interface AlarmStateMessage {
+  notify?: boolean;
+  text?: string | null;
+}
+
+/** Notification overrides keyed by the state being entered. */
+export interface AlarmMessages {
+  alarm?: AlarmStateMessage;
+  ok?: AlarmStateMessage;
+  pending?: AlarmStateMessage;
+  no_data?: AlarmStateMessage;
 }
 
 export type AlarmOperator = "eq" | "ge" | "gt" | "le" | "lt";
@@ -98,6 +125,13 @@ export interface ConnectionDetails {
   __source?: SourceProvenance;
 }
 
+/**
+ * How a subscription's `topic_filter` entries are matched. `exact` is literal
+ * (and the server's default when the field is absent); `regex` matches each
+ * expression against the whole canonical topic. Entries are ORed either way.
+ */
+export type NotificationTopicFilterMode = "exact" | "regex";
+
 export interface NotificationSubscriptionEndpoint {
   id: string;
   name: string;
@@ -110,6 +144,7 @@ export interface NotificationSubscription {
   subscribed_to: string;
   severity: number;
   topic_filter: string[];
+  topic_filter_mode: NotificationTopicFilterMode;
   endpoints: NotificationSubscriptionEndpoint[];
   __source?: SourceProvenance;
 }
@@ -122,6 +157,22 @@ export interface NotificationEndpoint {
   extra_data: Record<string, JSONValue>;
   name: string;
   default: boolean;
+  __source?: SourceProvenance;
+}
+
+/**
+ * Delivery readiness for an endpoint, without its destination address or
+ * `extra_data` — the one endpoint listing a delegated subscription manager is
+ * allowed to see.
+ */
+export interface NotificationEndpointSummary {
+  id: string;
+  type: number;
+  priority: number | null;
+  name: string;
+  display_name: string | null;
+  default: boolean;
+  ready: boolean;
   __source?: SourceProvenance;
 }
 

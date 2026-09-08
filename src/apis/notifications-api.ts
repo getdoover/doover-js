@@ -4,6 +4,7 @@ import type {
   CreateNotificationSubscriptionRequest,
   NotificationDataResponse,
   NotificationEndpoint,
+  NotificationEndpointSummariesResponse,
   NotificationEndpointsResponse,
   NotificationSubscribersResponse,
   NotificationSubscriptionCreateResponse,
@@ -40,6 +41,23 @@ export class NotificationsApi {
     return this.rest.get<NotificationEndpointsResponse>(
       `/agents/${agentId}/notifications/endpoints`,
       { name },
+    );
+  }
+
+  /**
+   * Delivery readiness for each endpoint, without addresses or credentials.
+   * Readable with either notification-read or manage-subscriptions rights, so
+   * a delegated subscription manager can list endpoints it can't otherwise see.
+   */
+  getAgentNotificationEndpointSummaries(agentId: string): Promise<NotificationEndpointSummariesResponse>;
+  getAgentNotificationEndpointSummaries(identifier: { agentId: string }): Promise<NotificationEndpointSummariesResponse>;
+  getAgentNotificationEndpointSummaries(...args: unknown[]): Promise<NotificationEndpointSummariesResponse> {
+    const { agentId } = resolveAgentArgs<undefined>(args);
+    return this._getAgentNotificationEndpointSummaries(agentId);
+  }
+  private _getAgentNotificationEndpointSummaries(agentId: string) {
+    return this.rest.get<NotificationEndpointSummariesResponse>(
+      `/agents/${agentId}/notifications/endpoints/summary`,
     );
   }
 
@@ -159,6 +177,34 @@ export class NotificationsApi {
     return this.rest.get<NotificationSubscriptionsResponse>(
       `/agents/${agentId}/notifications/subscriptions/default`,
       { subscribed_to },
+    );
+  }
+
+  /**
+   * Update every default subscription this subscriber holds on `subscribedTo`
+   * at once. Omitted fields keep their current value.
+   */
+  updateDefaultNotificationSubscription(agentId: string, subscribedTo: string, body: UpdateNotificationSubscriptionRequest): Promise<unknown>;
+  updateDefaultNotificationSubscription(identifier: { agentId: string }, subscribedTo: string, body: UpdateNotificationSubscriptionRequest): Promise<unknown>;
+  updateDefaultNotificationSubscription(...args: unknown[]): Promise<unknown> {
+    if (typeof args[0] === "string") {
+      return this._updateDefaultNotificationSubscription(
+        args[0],
+        args[1] as string,
+        args[2] as UpdateNotificationSubscriptionRequest,
+      );
+    }
+    const id = args[0] as { agentId: string };
+    return this._updateDefaultNotificationSubscription(
+      id.agentId,
+      args[1] as string,
+      args[2] as UpdateNotificationSubscriptionRequest,
+    );
+  }
+  private _updateDefaultNotificationSubscription(agentId: string, subscribedTo: string, body: UpdateNotificationSubscriptionRequest) {
+    return this.rest.patch<unknown>(
+      `/agents/${agentId}/notifications/subscriptions/default/${subscribedTo}`,
+      body,
     );
   }
 
