@@ -1,6 +1,6 @@
 {
   "package": "doover-js",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "esbuildVersion": "0.27.7",
   "nodeVersion": "v24.18.0",
   "typescriptVersion": "5.9.3",
@@ -16,7 +16,7 @@
     "gzip": "node:zlib gzipSync defaults"
   },
   "exportCount": 53,
-  "packedBytes": 165623,
+  "packedBytes": 165625,
   "unpackedBytes": 1104421,
   "packedFileCount": 340,
   "checks": [

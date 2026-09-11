@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +15,8 @@ for (let index = 0; index < args.length; index += 2) {
     "Usage: node scripts/check-package.mjs [--report path.json] [--baseline built-package-directory]");
   options.set(args[index], resolve(root, args[index + 1]));
 }
-const temp = await mkdtemp(join(tmpdir(), "doover-package-"));
+// Use a canonical path so macOS temp-directory symlinks do not change esbuild's metadata paths.
+const temp = await mkdtemp(join(await realpath(tmpdir()), "doover-package-"));
 const run = (command, commandArgs, cwd = temp) => execFileSync(command, commandArgs, {
   cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
 });
@@ -176,7 +177,7 @@ void [client, startupClient, channels, value, DooverProvider];
     const output = result.outputFiles[0].contents;
     const metadata = Object.values(result.metafile.outputs)[0];
     const contributors = Object.entries(metadata.inputs).filter(([, input]) => input.bytesInOutput > 0)
-      .map(([path, input]) => ({ path: path.endsWith(`/${entry.name}.js`) ? `fixture/${entry.name}.js`
+      .map(([path, input]) => ({ path: path === `${entry.name}.js` || path.endsWith(`/${entry.name}.js`) ? `fixture/${entry.name}.js`
         : path.replace(`node_modules/${pkg.name}/`, ""), bytes: input.bytesInOutput }));
     assert(output.length < entry.budget, `${entry.name}: ${output.length} bytes exceeds budget ${entry.budget}`);
     if (entry.name.startsWith("client-") || entry.name.startsWith("startup-")) {
