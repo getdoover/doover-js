@@ -1,10 +1,10 @@
-import type { SourceProvenance } from "./provenance";
+import type { SourceProvenance } from "./provenance.js";
 import type {
   Aggregate,
   Channel,
   ConnectionDetails,
   MessageStructure,
-} from "./common";
+} from "./common.js";
 
 export interface ChannelIdentifier {
   agentId?: string;

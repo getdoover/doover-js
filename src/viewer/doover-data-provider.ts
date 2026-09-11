@@ -1,14 +1,14 @@
-import { AgentsApi } from "../apis/agents-api";
-import { AggregatesApi, type AggregateMutationParams } from "../apis/aggregates-api";
-import { ChannelsApi } from "../apis/channels-api";
-import { ConnectionsApi } from "../apis/connections-api";
-import { MessagesApi, type ListMessagesParams } from "../apis/messages-api";
-import { UsersApi } from "../apis/users-api";
-import type { DooverAuth } from "../auth/doover-auth";
-import { GatewayClient } from "../gateway/gateway-client";
-import { DooverValidationError } from "../http/errors";
-import { RestClient, type DooverClientConfig } from "../http/rest-client";
-import { RpcDispatcher } from "../rpc/rpc-dispatcher";
+import { AgentsApi } from "../apis/agents-api.js";
+import { AggregatesApi, type AggregateMutationParams } from "../apis/aggregates-api.js";
+import { ChannelsApi } from "../apis/channels-api.js";
+import { ConnectionsApi } from "../apis/connections-api.js";
+import { MessagesApi, type ListMessagesParams } from "../apis/messages-api.js";
+import { UsersApi } from "../apis/users-api.js";
+import type { DooverAuth } from "../auth/doover-auth.js";
+import { GatewayClient } from "../gateway/gateway-client.js";
+import { DooverValidationError } from "../http/errors.js";
+import { RestClient, type DooverClientConfig } from "../http/rest-client.js";
+import { RpcDispatcher } from "../rpc/rpc-dispatcher.js";
 import type {
   Aggregate,
   Channel,
@@ -17,7 +17,7 @@ import type {
   MessageStructure,
   RpcRequest,
   RpcStatus,
-} from "../types/common";
+} from "../types/common.js";
 import type {
   Agent,
   AgentsResponse,
@@ -26,8 +26,8 @@ import type {
   GetAgentsOptions,
   SubscriptionDetails,
   User,
-} from "../types/viewer";
-import { getIdentifierFromPath as parseIdentifierFromPath } from "./path-parsing";
+} from "../types/viewer.js";
+import { getIdentifierFromPath as parseIdentifierFromPath } from "./path-parsing.js";
 
 interface SubscriptionEntry {
   messageCallback: (

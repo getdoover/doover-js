@@ -1,14 +1,14 @@
-import type { DooverAuth } from "../auth/doover-auth";
-import type { DooverStatsCollector } from "../client/stats";
-import type { DooverClientConfig } from "../http/rest-client";
-import { DooverGatewayError } from "../http/errors";
-import { addTimestampToMessage } from "../utils/snowflake";
+import type { DooverAuth } from "../auth/doover-auth.js";
+import type { DooverStatsCollector } from "../client/stats.js";
+import type { DooverClientConfig } from "../http/rest-client.js";
+import { DooverGatewayError } from "../http/errors.js";
+import { addTimestampToMessage } from "../utils/snowflake.js";
 import type {
   GatewayInboundMessage,
   GatewayListenerMap,
   WebSocketSession,
-} from "./types";
-import type { Aggregate, ChannelRef, JSONValue, MessageStructure } from "../types/common";
+} from "./types.js";
+import type { Aggregate, ChannelRef, JSONValue, MessageStructure } from "../types/common.js";
 
 export type GatewayProvenanceHook = <T>(
   value: T,

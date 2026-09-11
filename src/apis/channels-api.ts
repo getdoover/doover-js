@@ -1,12 +1,12 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   Channel,
   CreateChannelRequest,
   DataSeries,
   PutChannelRequest,
-} from "../types/openapi";
-import { resolveAgentArgs, resolveChannelArgs } from "./_args";
-import type { DooverRequestOptions } from "../client/request-options";
+} from "../types/openapi.js";
+import { resolveAgentArgs, resolveChannelArgs } from "./_args.js";
+import type { DooverRequestOptions } from "../client/request-options.js";
 
 export interface ListChannelsOptions {
   include_aggregate?: boolean;

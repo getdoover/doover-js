@@ -1,22 +1,22 @@
-import { AgentsApi } from "../apis/agents-api";
-import { AggregatesApi } from "../apis/aggregates-api";
-import { AlarmsApi } from "../apis/alarms-api";
-import { ChannelsApi } from "../apis/channels-api";
-import { ConnectionsApi } from "../apis/connections-api";
-import { MessagesApi } from "../apis/messages-api";
-import { NotificationsApi } from "../apis/notifications-api";
-import { OrganisationsApi } from "../apis/organisations-api";
-import { PermissionsApi } from "../apis/permissions-api";
-import { ProcessorsApi } from "../apis/processors-api";
-import { TurnApi } from "../apis/turn-api";
-import { UsersApi } from "../apis/users-api";
-import { buildAuth } from "../auth/build-auth";
-import type { DooverAuth } from "../auth/doover-auth";
-import { GatewayClient } from "../gateway/gateway-client";
-import { RestClient, type DooverClientConfig } from "../http/rest-client";
-import { RpcDispatcher } from "../rpc/rpc-dispatcher";
-import { DooverDataProvider } from "../viewer/doover-data-provider";
-import { ALL_CAPABILITIES, type Capability } from "./capabilities";
+import { AgentsApi } from "../apis/agents-api.js";
+import { AggregatesApi } from "../apis/aggregates-api.js";
+import { AlarmsApi } from "../apis/alarms-api.js";
+import { ChannelsApi } from "../apis/channels-api.js";
+import { ConnectionsApi } from "../apis/connections-api.js";
+import { MessagesApi } from "../apis/messages-api.js";
+import { NotificationsApi } from "../apis/notifications-api.js";
+import { OrganisationsApi } from "../apis/organisations-api.js";
+import { PermissionsApi } from "../apis/permissions-api.js";
+import { ProcessorsApi } from "../apis/processors-api.js";
+import { TurnApi } from "../apis/turn-api.js";
+import { UsersApi } from "../apis/users-api.js";
+import { buildAuth } from "../auth/build-auth.js";
+import type { DooverAuth } from "../auth/doover-auth.js";
+import { GatewayClient } from "../gateway/gateway-client.js";
+import { RestClient, type DooverClientConfig } from "../http/rest-client.js";
+import { RpcDispatcher } from "../rpc/rpc-dispatcher.js";
+import { DooverDataProvider } from "../viewer/doover-data-provider.js";
+import { ALL_CAPABILITIES, type Capability } from "./capabilities.js";
 import type {
   AgentsApiLike,
   AggregatesApiLike,
@@ -34,10 +34,10 @@ import type {
   RpcDispatcherLike,
   TurnApiLike,
   UsersApiLike,
-} from "./data-client";
-import { ProvenanceStamper, wrapSubclient, type ClientIdentity } from "./provenance";
-import { ClientStatusTracker } from "./status-tracker";
-import { DooverStatsCollector, type DooverStatsSnapshot } from "./stats";
+} from "./data-client.js";
+import { ProvenanceStamper, wrapSubclient, type ClientIdentity } from "./provenance.js";
+import { ClientStatusTracker } from "./status-tracker.js";
+import { DooverStatsCollector, type DooverStatsSnapshot } from "./stats.js";
 
 const ALL_CAPS_SET: ReadonlySet<Capability> = new Set(ALL_CAPABILITIES);
 

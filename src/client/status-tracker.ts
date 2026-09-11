@@ -3,7 +3,7 @@ import type {
   DataClientConnectionState,
   DataClientStatus,
   GatewayClientLike,
-} from "./data-client";
+} from "./data-client.js";
 
 /**
  * Tracks a `DataClient`'s realtime status by subscribing to its gateway's

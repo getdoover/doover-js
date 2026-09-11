@@ -1,7 +1,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import type { ChannelIdentifier } from "../types/viewer";
-import { useDooverClient } from "./context";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { useDooverClient } from "./context.js";
 
 export function invocationLogsQueryKey(
   agentId: string | undefined,

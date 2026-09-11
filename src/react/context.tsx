@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { DataClient } from "../client/data-client";
+import type { DataClient } from "../client/data-client.js";
 
 const DooverClientContext = createContext<DataClient | null>(null);
 

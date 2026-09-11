@@ -1,8 +1,8 @@
-import { DooverAuth } from "./doover-auth";
-import { DooverAuthError } from "./errors";
-import { decodeTokenExpiry } from "./jwt";
-import type { AuthProfile } from "./auth-profile";
-import type { AuthProfileStore } from "./auth-store";
+import { DooverAuth } from "./doover-auth.js";
+import { DooverAuthError } from "./errors.js";
+import { decodeTokenExpiry } from "./jwt.js";
+import type { AuthProfile } from "./auth-profile.js";
+import type { AuthProfileStore } from "./auth-store.js";
 
 /** Buffer in milliseconds before expiry at which we trigger a refresh (30 s). */
 const REFRESH_BUFFER_MS = 30_000;

@@ -1,5 +1,5 @@
-import type { AuthProfile } from "./auth-profile";
-import type { AuthProfileStore } from "./auth-store";
+import type { AuthProfile } from "./auth-profile.js";
+import type { AuthProfileStore } from "./auth-store.js";
 
 /**
  * Abstract base class shared by cookie and token auth strategies.

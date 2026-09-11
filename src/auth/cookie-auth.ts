@@ -1,4 +1,4 @@
-import { DooverAuth } from "./doover-auth";
+import { DooverAuth } from "./doover-auth.js";
 
 /** Default FusionAuth hosted-backend refresh endpoint. */
 const DEFAULT_REFRESH_PATH = "/app/refresh/";

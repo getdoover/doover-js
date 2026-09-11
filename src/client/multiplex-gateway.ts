@@ -1,6 +1,6 @@
-import type { GatewayClientLike } from "./data-client";
-import type { ChannelRef } from "../types/common";
-import type { WebSocketSession } from "../gateway/types";
+import type { GatewayClientLike } from "./data-client.js";
+import type { ChannelRef } from "../types/common.js";
+import type { WebSocketSession } from "../gateway/types.js";
 
 /** Minimal view of what MultiplexGateway needs from the owning multiplex. */
 export interface MultiplexGatewayHost {

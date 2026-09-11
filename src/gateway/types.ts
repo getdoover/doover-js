@@ -1,4 +1,4 @@
-import type { Aggregate, Alarm, ChannelRef, JSONValue, MessageStructure } from "../types/common";
+import type { Aggregate, Alarm, ChannelRef, JSONValue, MessageStructure } from "../types/common.js";
 
 export interface WebSocketSubscription {
   channel: ChannelRef;

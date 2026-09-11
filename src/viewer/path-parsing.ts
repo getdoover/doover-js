@@ -1,4 +1,4 @@
-import type { ChannelIdentifier } from "../types/viewer";
+import type { ChannelIdentifier } from "../types/viewer.js";
 
 export function getIdentifierFromPath<TIdentifier extends ChannelIdentifier>(
   path: string,

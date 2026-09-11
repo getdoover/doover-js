@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 
-import type { AggregateMutationParams } from "../apis/aggregates-api";
-import type { Aggregate } from "../types/common";
-import type { ChannelIdentifier } from "../types/viewer";
-import { useDooverClient } from "./context";
-import { channelAggregateQueryKey } from "./useChannelAggregate";
+import type { AggregateMutationParams } from "../apis/aggregates-api.js";
+import type { Aggregate } from "../types/common.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { useDooverClient } from "./context.js";
+import { channelAggregateQueryKey } from "./useChannelAggregate.js";
 
 export interface UseUpdateAggregateOptions {
   /** If true, use PUT semantics (replace) instead of PATCH (merge). */

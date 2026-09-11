@@ -15,15 +15,15 @@ import type {
   RpcDispatcherLike,
   TurnApiLike,
   UsersApiLike,
-} from "./data-client";
-import type { Capability } from "./capabilities";
-import { DooverOfflineError } from "./errors";
+} from "./data-client.js";
+import type { Capability } from "./capabilities.js";
+import { DooverOfflineError } from "./errors.js";
 import {
   delegateRequestOptions,
   splitRequestOptions,
   type DooverRequestOptions,
-} from "./request-options";
-import type { Aggregate, MessageStructure } from "../types/common";
+} from "./request-options.js";
+import type { Aggregate, MessageStructure } from "../types/common.js";
 
 export const DEFAULT_OFFLINE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 

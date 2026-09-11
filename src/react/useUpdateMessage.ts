@@ -1,8 +1,8 @@
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 
-import type { MessageBody, MessageMutationParams } from "../apis/messages-api";
-import type { ChannelIdentifier } from "../types/viewer";
-import { useDooverClient } from "./context";
+import type { MessageBody, MessageMutationParams } from "../apis/messages-api.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { useDooverClient } from "./context.js";
 
 export interface UpdateMessageCallOptions {
   /**

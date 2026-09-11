@@ -1,4 +1,4 @@
-import type { OfflineReadCacheOptions } from "./offline-cache";
+import type { OfflineReadCacheOptions } from "./offline-cache.js";
 
 export const REQUEST_OPTIONS_SYMBOL: unique symbol = Symbol.for(
   "doover.requestOptions",

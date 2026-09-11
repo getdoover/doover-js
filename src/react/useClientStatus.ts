@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import type { DataClientStatus } from "../client/data-client";
-import { useDooverClient } from "./context";
+import type { DataClientStatus } from "../client/data-client.js";
+import { useDooverClient } from "./context.js";
 
 /**
  * Returns the live `DataClientStatus` for the client in context. Seeds with

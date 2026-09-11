@@ -1,11 +1,11 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   AgentPermission,
   PermissionDebugResponse,
   SuccessListResponse,
   SyncPermissionRequest,
-} from "../types/openapi";
-import { resolveAgentArgs } from "./_args";
+} from "../types/openapi.js";
+import { resolveAgentArgs } from "./_args.js";
 
 export class PermissionsApi {
   constructor(private readonly rest: RestClient) {}

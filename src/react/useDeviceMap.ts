@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { useAgentChannel } from "./useAgentChannel";
+import { useAgentChannel } from "./useAgentChannel.js";
 
 /**
  * Default shape for entries in an agent's `DEVICE_MAP` — covers every field

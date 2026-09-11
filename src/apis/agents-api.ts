@@ -3,11 +3,11 @@ import type {
   BatchAggregatesResponse,
   BatchMessagesResponse,
   MessageStructure,
-} from "../types/openapi";
-import type { Agent, AgentsResponse, GetAgentsOptions } from "../types/viewer";
-import { addTimestampToMessage } from "../utils/snowflake";
-import type { RestClient } from "../http/rest-client";
-import type { DooverRequestOptions } from "../client/request-options";
+} from "../types/openapi.js";
+import type { Agent, AgentsResponse, GetAgentsOptions } from "../types/viewer.js";
+import { addTimestampToMessage } from "../utils/snowflake.js";
+import type { RestClient } from "../http/rest-client.js";
+import type { DooverRequestOptions } from "../client/request-options.js";
 
 export interface MultiAgentMessagesParams {
   agent_id: string[];

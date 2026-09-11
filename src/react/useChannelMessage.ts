@@ -5,10 +5,10 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { JSONValue, MessageAttachment, MessageStructure } from "../types/common";
-import type { ChannelIdentifier } from "../types/viewer";
-import { useDooverClient } from "./context";
-import { useChannelSubscription } from "./useChannelSubscription";
+import type { JSONValue, MessageAttachment, MessageStructure } from "../types/common.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { useDooverClient } from "./context.js";
+import { useChannelSubscription } from "./useChannelSubscription.js";
 
 export function channelMessageQueryKey(
   agentId: string | undefined,

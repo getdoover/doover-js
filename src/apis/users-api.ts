@@ -1,5 +1,5 @@
-import type { RestClient } from "../http/rest-client";
-import type { User } from "../types/viewer";
+import type { RestClient } from "../http/rest-client.js";
+import type { User } from "../types/viewer.js";
 
 export class UsersApi {
   constructor(

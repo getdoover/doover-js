@@ -5,9 +5,9 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Aggregate, JSONValue, AgentAggregate } from "../types/common";
-import { useDooverClient } from "./context";
-import { channelAggregateQueryKey } from "./useChannelAggregate";
+import type { Aggregate, JSONValue, AgentAggregate } from "../types/common.js";
+import { useDooverClient } from "./context.js";
+import { channelAggregateQueryKey } from "./useChannelAggregate.js";
 
 export function multiAgentAggregatesQueryKey(
   channelName: string,

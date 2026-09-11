@@ -17,7 +17,7 @@ import type {
   NotificationTopicFilterMode,
   ResourcePermission,
   TurnCredential,
-} from "./common";
+} from "./common.js";
 
 export type {
   AgentAggregate,

@@ -1,11 +1,11 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   CreateIngestionRequest,
   PutScheduleRequest,
   PutSubscriptionRequest,
   ScheduleInfo,
   SubscriptionInfo,
-} from "../types/openapi";
+} from "../types/openapi.js";
 
 export class ProcessorsApi {
   constructor(private readonly rest: RestClient) {}

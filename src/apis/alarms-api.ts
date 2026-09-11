@@ -1,6 +1,6 @@
-import type { RestClient } from "../http/rest-client";
-import type { Alarm, CreateAlarmRequest, PatchAlarmRequest } from "../types/openapi";
-import { resolveAgentArgs, resolveChannelArgs } from "./_args";
+import type { RestClient } from "../http/rest-client.js";
+import type { Alarm, CreateAlarmRequest, PatchAlarmRequest } from "../types/openapi.js";
+import { resolveAgentArgs, resolveChannelArgs } from "./_args.js";
 
 export class AlarmsApi {
   constructor(private readonly rest: RestClient) {}

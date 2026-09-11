@@ -1,104 +1,104 @@
-export { DooverProvider, useDooverClient } from "./context";
-export type { DooverProviderProps } from "./context";
+export { DooverProvider, useDooverClient } from "./context.js";
+export type { DooverProviderProps } from "./context.js";
 
-export type { DataClientStatus, DataClientConnectionState, AgentScope } from "../client/data-client";
+export type { DataClientStatus, DataClientConnectionState, AgentScope } from "../client/data-client.js";
 
-export { useClientStatus } from "./useClientStatus";
-export { useOfflineStatus, hasOfflineStatus } from "./useOfflineStatus";
-export type { OfflineStatusSnapshot, OfflineStatusClient } from "./useOfflineStatus";
+export { useClientStatus } from "./useClientStatus.js";
+export { useOfflineStatus, hasOfflineStatus } from "./useOfflineStatus.js";
+export type { OfflineStatusSnapshot, OfflineStatusClient } from "./useOfflineStatus.js";
 
-export { useConnectionState } from "./useConnectionState";
-export type { ConnectionState, ConnectionStatus } from "./useConnectionState";
+export { useConnectionState } from "./useConnectionState.js";
+export type { ConnectionState, ConnectionStatus } from "./useConnectionState.js";
 
 export {
   useAgentConnections,
   agentConnectionsQueryKey,
-} from "./useAgentConnections";
+} from "./useAgentConnections.js";
 
 export {
   useChannelSubscription,
-} from "./useChannelSubscription";
-export type { ChannelSubscriptionHandlers } from "./useChannelSubscription";
+} from "./useChannelSubscription.js";
+export type { ChannelSubscriptionHandlers } from "./useChannelSubscription.js";
 
 export {
   useChannelAggregate,
   channelAggregateQueryKey,
-} from "./useChannelAggregate";
+} from "./useChannelAggregate.js";
 export type {
   UseChannelAggregateOptions,
   UseChannelAggregateResult,
-} from "./useChannelAggregate";
-export { useAgentChannel } from "./useAgentChannel";
+} from "./useChannelAggregate.js";
+export { useAgentChannel } from "./useAgentChannel.js";
 
-export { useSendMessage } from "./useSendMessage";
-export type { UseSendMessageOptions } from "./useSendMessage";
-export { useUpdateAggregate } from "./useUpdateAggregate";
-export type { UseUpdateAggregateOptions } from "./useUpdateAggregate";
-export { useUpdateMessage } from "./useUpdateMessage";
+export { useSendMessage } from "./useSendMessage.js";
+export type { UseSendMessageOptions } from "./useSendMessage.js";
+export { useUpdateAggregate } from "./useUpdateAggregate.js";
+export type { UseUpdateAggregateOptions } from "./useUpdateAggregate.js";
+export { useUpdateMessage } from "./useUpdateMessage.js";
 export type {
   UpdateMessageVariables,
   UseUpdateMessageOptions,
-} from "./useUpdateMessage";
+} from "./useUpdateMessage.js";
 
 export {
   useChannelMessages,
   channelMessagesQueryKey,
-} from "./useChannelMessages";
+} from "./useChannelMessages.js";
 export type {
   UseChannelMessagesOptions,
   UseChannelMessagesResult,
-} from "./useChannelMessages";
+} from "./useChannelMessages.js";
 
 export {
   useChannelMessage,
   channelMessageQueryKey,
-} from "./useChannelMessage";
+} from "./useChannelMessage.js";
 export type {
   UseChannelMessageOptions,
   UseChannelMessageResult,
-} from "./useChannelMessage";
+} from "./useChannelMessage.js";
 
 export {
   useInvocationLogs,
   invocationLogsQueryKey,
-} from "./useInvocationLogs";
-export type { UseInvocationLogsOptions } from "./useInvocationLogs";
+} from "./useInvocationLogs.js";
+export type { UseInvocationLogsOptions } from "./useInvocationLogs.js";
 
-export { useSendRpc } from "./useSendRpc";
+export { useSendRpc } from "./useSendRpc.js";
 export type {
   RpcCommandId,
   RpcStatusEvent,
   SendRpcVariables,
   UseSendRpcOptions,
   UseSendRpcResult,
-} from "./useSendRpc";
+} from "./useSendRpc.js";
 
 export {
   useMultiAgentAggregates,
   multiAgentAggregatesQueryKey,
-} from "./useMultiAgentAggregates";
+} from "./useMultiAgentAggregates.js";
 export type {
   UseMultiAgentAggregatesOptions,
   UseMultiAgentAggregatesResult,
-} from "./useMultiAgentAggregates";
+} from "./useMultiAgentAggregates.js";
 
 export {
   useMultiAgentChannelMessages,
   multiAgentChannelMessagesQueryKey,
-} from "./useMultiAgentChannelMessages";
+} from "./useMultiAgentChannelMessages.js";
 export type {
   UseMultiAgentChannelMessagesOptions,
   UseMultiAgentChannelMessagesResult,
-} from "./useMultiAgentChannelMessages";
+} from "./useMultiAgentChannelMessages.js";
 
-export { useDeviceMap } from "./useDeviceMap";
+export { useDeviceMap } from "./useDeviceMap.js";
 export type {
   DeviceMapEntry,
   UseDeviceMapOptions,
   UseDeviceMapResult,
-} from "./useDeviceMap";
+} from "./useDeviceMap.js";
 
-export { useTurnCredentials } from "./useTurnCredentials";
+export { useTurnCredentials } from "./useTurnCredentials.js";
 
 export {
   useAgentTokenState,
@@ -109,10 +109,10 @@ export {
   useCreateAdhocToken,
   useCreateDeviceToken,
   agentTokenStateQueryKey,
-} from "./useAgentTokenState";
-export type { UseAgentTokenStateOptions } from "./useAgentTokenState";
+} from "./useAgentTokenState.js";
+export type { UseAgentTokenStateOptions } from "./useAgentTokenState.js";
 
 export {
   getSharedQueryClient,
   resetSharedQueryClient,
-} from "./sharedQueryClient";
+} from "./sharedQueryClient.js";

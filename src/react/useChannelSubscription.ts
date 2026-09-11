@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 
-import type { Aggregate, JSONValue, MessageStructure } from "../types/common";
-import type { ChannelIdentifier } from "../types/viewer";
-import { useDooverClient } from "./context";
+import type { Aggregate, JSONValue, MessageStructure } from "../types/common.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { useDooverClient } from "./context.js";
 
 export interface ChannelSubscriptionHandlers {
   onMessage?: (message: MessageStructure) => void;

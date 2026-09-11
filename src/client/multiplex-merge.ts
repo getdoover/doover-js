@@ -1,4 +1,4 @@
-import type { MessageStructure } from "../types/common";
+import type { MessageStructure } from "../types/common.js";
 
 /** Keep the first item for each key; preserve input order otherwise. */
 export function dedupeBy<T>(items: T[], keyOf: (item: T) => string): T[] {
