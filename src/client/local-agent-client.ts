@@ -1,10 +1,10 @@
-import { AgentsApi } from "../apis/agents-api";
-import { AggregatesApi } from "../apis/aggregates-api";
-import { ChannelsApi } from "../apis/channels-api";
-import { MessagesApi } from "../apis/messages-api";
-import { GatewayClient } from "../gateway/gateway-client";
-import { RestClient, type DooverClientConfig } from "../http/rest-client";
-import type { Capability } from "./capabilities";
+import { AgentsApi } from "../apis/agents-api.js";
+import { AggregatesApi } from "../apis/aggregates-api.js";
+import { ChannelsApi } from "../apis/channels-api.js";
+import { MessagesApi } from "../apis/messages-api.js";
+import { GatewayClient } from "../gateway/gateway-client.js";
+import { RestClient, type DooverClientConfig } from "../http/rest-client.js";
+import type { Capability } from "./capabilities.js";
 import type {
   AgentScope,
   AgentsApiLike,
@@ -22,10 +22,10 @@ import type {
   RpcDispatcherLike,
   TurnApiLike,
   UsersApiLike,
-} from "./data-client";
-import { UnsupportedCapabilityError } from "./errors";
-import { ProvenanceStamper, wrapSubclient, type ClientIdentity, type WrappedSubclient } from "./provenance";
-import { ClientStatusTracker } from "./status-tracker";
+} from "./data-client.js";
+import { UnsupportedCapabilityError } from "./errors.js";
+import { ProvenanceStamper, wrapSubclient, type ClientIdentity, type WrappedSubclient } from "./provenance.js";
+import { ClientStatusTracker } from "./status-tracker.js";
 
 export interface LocalAgentClientConfig {
   /** Base URL of the local agent's REST API, e.g. "http://192.168.0.7:49100". */

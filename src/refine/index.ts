@@ -1,4 +1,4 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 
 export type RefineRecord = Record<string, unknown> & { id?: string | number };
 export type RefineMeta = Record<string, unknown> | undefined;

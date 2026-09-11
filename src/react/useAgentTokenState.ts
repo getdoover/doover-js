@@ -9,8 +9,8 @@ import type {
   AgentTokenPolicy,
   AgentTokenState,
   ResourcePermission,
-} from "../apis/agents-api";
-import { useDooverClient } from "./context";
+} from "../apis/agents-api.js";
+import { useDooverClient } from "./context.js";
 
 export function agentTokenStateQueryKey(agentId: string | undefined) {
   return ["doover", "agent", agentId ?? null, "tokenState"] as const;

@@ -1,13 +1,13 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   CreateMessageRequest,
   DataSeries,
   MessageStructure,
   UpdateMessageRequest,
-} from "../types/openapi";
-import { addTimestampToMessage, generateSnowflakeIdAtTime } from "../utils/snowflake";
-import { resolveChannelArgs } from "./_args";
-import type { DooverRequestOptions } from "../client/request-options";
+} from "../types/openapi.js";
+import { addTimestampToMessage, generateSnowflakeIdAtTime } from "../utils/snowflake.js";
+import { resolveChannelArgs } from "./_args.js";
+import type { DooverRequestOptions } from "../client/request-options.js";
 import {
   chunkBatchItems,
   mergeBatchResponses,
@@ -15,7 +15,7 @@ import {
   type BatchDeleteMessageItem,
   type BatchMessageResponse,
   type BatchUpdateMessageItem,
-} from "../types/batch";
+} from "../types/batch.js";
 
 export interface ListMessagesParams {
   before?: string;

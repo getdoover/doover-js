@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-import type { OfflineStatusSnapshot } from "../client/offline-cache";
-import { useDooverClient } from "./context";
+import type { OfflineStatusSnapshot } from "../client/offline-cache.js";
+import { useDooverClient } from "./context.js";
 
-export type { OfflineStatusSnapshot } from "../client/offline-cache";
+export type { OfflineStatusSnapshot } from "../client/offline-cache.js";
 
 export interface OfflineStatusClient {
   getOfflineStatus(): OfflineStatusSnapshot;

@@ -2,6 +2,85 @@
 
 TypeScript client for Doover.
 
+## Tree shaking and smaller imports
+
+The package publishes native ES modules for `import` and CommonJS for `require`.
+Production bundlers can remove unused exports from the ESM build. Keep your
+application's imports as ESM until bundling, and enable the bundler's production
+optimisations. CommonJS consumers retain compatibility and can use the focused
+entry points to load less code.
+
+Applications that use the shared cloud client can keep their startup pattern:
+
+```ts
+import { getDooverClient } from "doover-js/client";
+
+const client = getDooverClient(config);
+```
+
+This entry point shares the root entry's singleton and excludes offline, local,
+multiplex, and React implementations from the cloud startup bundle.
+
+```ts
+import { extractSnowflakeId } from "doover-js/utils";
+import { RestClient } from "doover-js/http";
+import { ChannelsApi } from "doover-js/apis/channels";
+
+const rest = new RestClient({
+	dataRestUrl: "https://example.com/api",
+	controlApiUrl: "https://example.com/control",
+	dataWssUrl: "wss://example.com/gateway",
+});
+const channels = new ChannelsApi(rest);
+const items = await channels.listChannels("my-agent");
+```
+
+This composition uses ambient cookies. For token auth or cookie refresh, pass an
+auth instance from `doover-js/auth` as the second argument to `RestClient`.
+`RestClient` does not build auth from token fields in its configuration.
+The low-level API classes return server data directly. They do not add the
+`DataClient` provenance, status, or capability behaviour supplied by `DooverClient`.
+
+| Import path | Use |
+| --- | --- |
+| `doover-js/client` | Cloud `DooverClient`, singleton helpers, and client types |
+| `doover-js/local` | `LocalAgentClient` |
+| `doover-js/multiplex` | `MultiplexClient` |
+| `doover-js/offline` | Offline wrapper and storage adapter |
+| `doover-js/http`, `doover-js/auth`, `doover-js/gateway`, `doover-js/rpc` | Individual transports and auth |
+| `doover-js/apis/<resource>` | `agents`, `aggregates`, `alarms`, `channels`, `connections`, `messages`, `notifications`, `organisations`, `permissions`, `processors`, `turn`, or `users` |
+| `doover-js/utils`, `doover-js/batch` | Snowflake and batch helpers |
+| `doover-js/types` | Shared types, used with `import type` |
+| `doover-js/capabilities`, `doover-js/errors`, `doover-js/request-options`, `doover-js/stats` | Shared client helpers |
+| `doover-js/viewer` | Legacy `DooverDataProvider` |
+| `doover-js/react/context` | `DooverProvider` and `useDooverClient`, without React Query |
+| `doover-js/react/<hook>` | Each exported hook module, such as `useClientStatus` or `useChannelMessages` |
+| `doover-js/react/sharedQueryClient` | Shared query client helpers |
+| `doover-js/node`, `doover-js/react`, `doover-js/refine` | Existing integration entry points |
+
+Related token mutation hooks share `doover-js/react/useAgentTokenState`.
+All existing root exports remain available. A named ESM import from the root can
+be as small as the equivalent focused import. Importing `DooverClient` still
+includes its APIs, gateway, RPC, stats, and legacy viewer because its constructor
+uses them. Choosing `doover-js/client` does not remove those features.
+
+The `module` export condition directs supporting bundlers to one ESM copy even
+when dependencies mix `import` and `require`. In native Node.js, or with bundlers
+that disable this condition, use one module format throughout each application
+runtime. Loading both builds creates separate class identities and React contexts,
+although the existing global client and query-client helpers still share their caches.
+The native ESM build has named exports. Replace an implicit CommonJS default import
+such as `import doover from "doover-js"` with named imports or
+`import * as doover from "doover-js"` when migrating to ESM.
+Use TypeScript's `node16`, `nodenext`, or `bundler` module resolution for conditional
+declarations. `typesVersions` also supports legacy `node` resolution.
+
+The [HTML optimisation plan](docs/optimisation-plan.html) contains the size
+comparison, remaining costs, and proposed API changes. Run `npm run size` to build
+the package, check its published entry points, and write current bundle measurements
+to `docs/optimisation-sizes.json`. Run `npm test` for type checking, the existing
+tests, and package compatibility and size checks.
+
 ## Exports
 
 ### Root (`doover-js`)

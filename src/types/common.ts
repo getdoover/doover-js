@@ -1,4 +1,4 @@
-import type { SourceProvenance } from "./provenance";
+import type { SourceProvenance } from "./provenance.js";
 
 export type JSONPrimitive = null | boolean | number | string;
 

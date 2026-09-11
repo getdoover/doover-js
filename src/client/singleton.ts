@@ -1,5 +1,5 @@
-import type { DooverClientConfig } from "../http/rest-client";
-import { DooverClient } from "./doover-client";
+import type { DooverClientConfig } from "../http/rest-client.js";
+import { DooverClient } from "./doover-client.js";
 
 const GLOBAL_KEY = "__doover_js_client__" as const;
 

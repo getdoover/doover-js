@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { useDooverClient } from "./context";
+import { useDooverClient } from "./context.js";
 
 export type ConnectionStatus = "connecting" | "open";
 

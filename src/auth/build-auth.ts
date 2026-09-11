@@ -1,9 +1,9 @@
-import type { AuthProfile } from "./auth-profile";
-import type { AuthProfileStore } from "./auth-store";
-import { CookieAuth } from "./cookie-auth";
-import { DooverAuth } from "./doover-auth";
-import { DooverTokenAuth } from "./doover-token-auth";
-import { DooverAuthError } from "./errors";
+import type { AuthProfile } from "./auth-profile.js";
+import type { AuthProfileStore } from "./auth-store.js";
+import { CookieAuth } from "./cookie-auth.js";
+import { DooverAuth } from "./doover-auth.js";
+import { DooverTokenAuth } from "./doover-token-auth.js";
+import { DooverAuthError } from "./errors.js";
 
 /**
  * Raw auth inputs that can be provided in client configs.

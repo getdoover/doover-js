@@ -2,9 +2,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-import { AuthProfile } from "../auth/auth-profile";
-import type { AuthProfileStore } from "../auth/auth-store";
-import { DooverAuthError } from "../auth/errors";
+import { AuthProfile } from "../auth/auth-profile.js";
+import type { AuthProfileStore } from "../auth/auth-store.js";
+import { DooverAuthError } from "../auth/errors.js";
 
 /**
  * File-backed profile store compatible with pydoover's config format.

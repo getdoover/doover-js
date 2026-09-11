@@ -1,5 +1,5 @@
-import type { Capability } from "./capabilities";
-import { DooverApiError } from "../http/errors";
+import type { Capability } from "./capabilities.js";
+import { DooverApiError } from "../http/errors.js";
 
 /**
  * Thrown when a `DataClient` method is called whose backing capability the

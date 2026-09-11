@@ -1,17 +1,17 @@
-import type { AgentsApi } from "../apis/agents-api";
-import type { AggregatesApi } from "../apis/aggregates-api";
-import type { AlarmsApi } from "../apis/alarms-api";
-import type { ChannelsApi } from "../apis/channels-api";
-import type { ConnectionsApi } from "../apis/connections-api";
-import type { MessagesApi } from "../apis/messages-api";
-import type { NotificationsApi } from "../apis/notifications-api";
-import type { PermissionsApi } from "../apis/permissions-api";
-import type { ProcessorsApi } from "../apis/processors-api";
-import type { TurnApi } from "../apis/turn-api";
-import type { UsersApi } from "../apis/users-api";
-import type { GatewayClient } from "../gateway/gateway-client";
-import type { RpcDispatcher } from "../rpc/rpc-dispatcher";
-import type { Capability } from "./capabilities";
+import type { AgentsApi } from "../apis/agents-api.js";
+import type { AggregatesApi } from "../apis/aggregates-api.js";
+import type { AlarmsApi } from "../apis/alarms-api.js";
+import type { ChannelsApi } from "../apis/channels-api.js";
+import type { ConnectionsApi } from "../apis/connections-api.js";
+import type { MessagesApi } from "../apis/messages-api.js";
+import type { NotificationsApi } from "../apis/notifications-api.js";
+import type { PermissionsApi } from "../apis/permissions-api.js";
+import type { ProcessorsApi } from "../apis/processors-api.js";
+import type { TurnApi } from "../apis/turn-api.js";
+import type { UsersApi } from "../apis/users-api.js";
+import type { GatewayClient } from "../gateway/gateway-client.js";
+import type { RpcDispatcher } from "../rpc/rpc-dispatcher.js";
+import type { Capability } from "./capabilities.js";
 
 /**
  * Public structural shape of each concrete subclient — `Pick<Class, keyof Class>`

@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
-import type { Aggregate } from "../types/common";
-import type { ChannelIdentifier } from "../types/viewer";
-import { DooverApiError } from "../http/errors";
-import { useDooverClient } from "./context";
-import { useChannelSubscription } from "./useChannelSubscription";
-import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus";
+import type { Aggregate } from "../types/common.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import { DooverApiError } from "../http/errors.js";
+import { useDooverClient } from "./context.js";
+import { useChannelSubscription } from "./useChannelSubscription.js";
+import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus.js";
 
 export function channelAggregateQueryKey(
   agentId: string | undefined,

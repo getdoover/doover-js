@@ -1,4 +1,4 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   CreateEndpointRequest,
   CreateNotificationSubscriptionRequest,
@@ -12,8 +12,8 @@ import type {
   UpdateEndpointRequest,
   UpdateMeWebPushEndpointRequest,
   UpdateNotificationSubscriptionRequest,
-} from "../types/openapi";
-import { resolveAgentArgs } from "./_args";
+} from "../types/openapi.js";
+import { resolveAgentArgs } from "./_args.js";
 
 export class NotificationsApi {
   constructor(private readonly rest: RestClient) {}

@@ -1,4 +1,4 @@
-import type { MessageStructure } from "../types/common";
+import type { MessageStructure } from "../types/common.js";
 
 /**
  * A per-channel cache of *proven-complete* id ranges.

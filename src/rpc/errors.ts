@@ -1,4 +1,4 @@
-import type { RpcRequest, RpcStatus } from "../types/common";
+import type { RpcRequest, RpcStatus } from "../types/common.js";
 
 export class DooverRpcError extends Error {
   readonly status: RpcStatus<unknown> & { code: "error" };

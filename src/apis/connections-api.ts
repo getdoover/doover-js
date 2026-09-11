@@ -1,10 +1,10 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   ConnectionDetails,
   ConnectionSubscription,
   ConnectionSubscriptionLog,
-} from "../types/openapi";
-import { resolveAgentArgs, resolveChannelArgs } from "./_args";
+} from "../types/openapi.js";
+import { resolveAgentArgs, resolveChannelArgs } from "./_args.js";
 
 export interface ConnectionHistoryParams {
   before?: string;

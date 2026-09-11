@@ -1,4 +1,4 @@
-import { isDooverRequestOptions } from "../client/request-options";
+import { isDooverRequestOptions } from "../client/request-options.js";
 
 export interface ChannelIdentifierLike {
   agentId: string;

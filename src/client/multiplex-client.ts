@@ -1,19 +1,19 @@
-import type { Capability } from "./capabilities";
+import type { Capability } from "./capabilities.js";
 import type {
   AgentScope, AgentsApiLike, AggregatesApiLike, AlarmsApiLike, ChannelsApiLike,
   ConnectionsApiLike, DataClient, DataClientStatus, GatewayClientLike,
   MessagesApiLike, NotificationsApiLike, PermissionsApiLike, ProcessorsApiLike,
   RpcDispatcherLike, TurnApiLike, UsersApiLike,
-} from "./data-client";
-import { dedupeBy, mergeMessages } from "./multiplex-merge";
-import { mergeBatchResponses, type BatchResponse, type BatchResultItem } from "../types/batch";
-import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors";
-import { extractSnowflakeId } from "../utils/snowflake";
-import { MultiplexGateway, type MultiplexGatewayHost } from "./multiplex-gateway";
+} from "./data-client.js";
+import { dedupeBy, mergeMessages } from "./multiplex-merge.js";
+import { mergeBatchResponses, type BatchResponse, type BatchResultItem } from "../types/batch.js";
+import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors.js";
+import { extractSnowflakeId } from "../utils/snowflake.js";
+import { MultiplexGateway, type MultiplexGatewayHost } from "./multiplex-gateway.js";
 
-export type { DataClient } from "./data-client";
-export type { AgentScope } from "./data-client";
-export type { DataClientStatus } from "./data-client";
+export type { DataClient } from "./data-client.js";
+export type { AgentScope } from "./data-client.js";
+export type { DataClientStatus } from "./data-client.js";
 
 export interface MultiplexConflict {
   method: string;

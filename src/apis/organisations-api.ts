@@ -1,9 +1,9 @@
-import type { RestClient } from "../http/rest-client";
+import type { RestClient } from "../http/rest-client.js";
 import type {
   CustomerSite,
   Organisation,
   PaginatedResponse,
-} from "../types/viewer";
+} from "../types/viewer.js";
 
 export interface ListOrganisationsOptions {
   page?: number;

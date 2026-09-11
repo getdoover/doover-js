@@ -1,7 +1,7 @@
-import type { AuthConfig } from "../auth/build-auth";
-import type { DooverAuth } from "../auth/doover-auth";
-import type { DooverStatsCollector } from "../client/stats";
-import { DooverApiError } from "./errors";
+import type { AuthConfig } from "../auth/build-auth.js";
+import type { DooverAuth } from "../auth/doover-auth.js";
+import type { DooverStatsCollector } from "../client/stats.js";
+import { DooverApiError } from "./errors.js";
 
 export interface DooverClientConfig extends AuthConfig {
   dataRestUrl: string;

@@ -1,8 +1,8 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import type { TurnCredential } from "../types/common";
-import type { TurnTokenRequest } from "../types/openapi";
-import { useDooverClient } from "./context";
+import type { TurnCredential } from "../types/common.js";
+import type { TurnTokenRequest } from "../types/openapi.js";
+import { useDooverClient } from "./context.js";
 
 /**
  * Fetch TURN (relay) credentials for a camera stream. Cached for 10 minutes

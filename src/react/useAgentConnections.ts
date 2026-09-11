@@ -1,7 +1,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import type { ConnectionDetails } from "../types/common";
-import { useDooverClient } from "./context";
+import type { ConnectionDetails } from "../types/common.js";
+import { useDooverClient } from "./context.js";
 
 export function agentConnectionsQueryKey(agentId: string | undefined) {
   return ["doover", "agent", agentId, "connections"] as const;

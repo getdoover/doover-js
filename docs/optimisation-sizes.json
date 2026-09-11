@@ -1,0 +1,761 @@
+{
+  "package": "doover-js",
+  "version": "0.12.0",
+  "esbuildVersion": "0.27.7",
+  "nodeVersion": "v24.18.0",
+  "typescriptVersion": "5.9.3",
+  "bundleOptions": {
+    "bundle": true,
+    "format": "esm",
+    "platform": "browser",
+    "target": "es2020",
+    "minify": true,
+    "define": {
+      "process.env.NODE_ENV": "\"production\""
+    },
+    "gzip": "node:zlib gzipSync defaults"
+  },
+  "exportCount": 53,
+  "packedBytes": 165623,
+  "unpackedBytes": 1104421,
+  "packedFileCount": 340,
+  "checks": [
+    "packed import/require exports",
+    "shared module identity",
+    "cloud startup singleton",
+    "mixed-format bundle context and client identity",
+    "core without optional peers",
+    "HTTP channel request",
+    "strict NodeNext ESM/CommonJS declarations",
+    "strict bundler declarations",
+    "strict legacy Node declarations",
+    "bundle budgets and exclusions"
+  ],
+  "bundles": [
+    {
+      "name": "utility-root",
+      "minifiedBytes": 177,
+      "gzipBytes": 159,
+      "budgetBytes": 512,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 144
+        }
+      ],
+      "baselineMinifiedBytes": 121435,
+      "baselineGzipBytes": 27998
+    },
+    {
+      "name": "utility-subpath",
+      "minifiedBytes": 177,
+      "gzipBytes": 158,
+      "budgetBytes": 512,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 144
+        }
+      ],
+      "baselineMinifiedBytes": 121435,
+      "baselineGzipBytes": 27998
+    },
+    {
+      "name": "http-root",
+      "minifiedBytes": 3330,
+      "gzipBytes": 1359,
+      "budgetBytes": 4500,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 203
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        }
+      ],
+      "baselineMinifiedBytes": 121403,
+      "baselineGzipBytes": 27998
+    },
+    {
+      "name": "http-subpath",
+      "minifiedBytes": 3330,
+      "gzipBytes": 1355,
+      "budgetBytes": 4500,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 203
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        }
+      ],
+      "baselineMinifiedBytes": 121403,
+      "baselineGzipBytes": 27998
+    },
+    {
+      "name": "channels-composition",
+      "minifiedBytes": 5236,
+      "gzipBytes": 1797,
+      "budgetBytes": 6500,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 203
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        },
+        {
+          "path": "dist/esm/client/request-options.js",
+          "bytes": 173
+        },
+        {
+          "path": "dist/esm/apis/_args.js",
+          "bytes": 375
+        },
+        {
+          "path": "dist/esm/apis/channels-api.js",
+          "bytes": 1329
+        },
+        {
+          "path": "fixture/channels-composition.js",
+          "bytes": 25
+        }
+      ],
+      "baselineMinifiedBytes": 121415,
+      "baselineGzipBytes": 28017
+    },
+    {
+      "name": "client-root",
+      "minifiedBytes": 55413,
+      "gzipBytes": 13707,
+      "budgetBytes": 68000,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 392
+        },
+        {
+          "path": "dist/esm/apis/agents-api.js",
+          "bytes": 4567
+        },
+        {
+          "path": "dist/esm/client/request-options.js",
+          "bytes": 175
+        },
+        {
+          "path": "dist/esm/apis/_args.js",
+          "bytes": 375
+        },
+        {
+          "path": "dist/esm/types/batch.js",
+          "bytes": 300
+        },
+        {
+          "path": "dist/esm/apis/aggregates-api.js",
+          "bytes": 1283
+        },
+        {
+          "path": "dist/esm/apis/alarms-api.js",
+          "bytes": 1525
+        },
+        {
+          "path": "dist/esm/apis/channels-api.js",
+          "bytes": 1329
+        },
+        {
+          "path": "dist/esm/apis/connections-api.js",
+          "bytes": 1030
+        },
+        {
+          "path": "dist/esm/apis/messages-api.js",
+          "bytes": 3454
+        },
+        {
+          "path": "dist/esm/apis/notifications-api.js",
+          "bytes": 4481
+        },
+        {
+          "path": "dist/esm/apis/organisations-api.js",
+          "bytes": 531
+        },
+        {
+          "path": "dist/esm/apis/permissions-api.js",
+          "bytes": 430
+        },
+        {
+          "path": "dist/esm/apis/processors-api.js",
+          "bytes": 2595
+        },
+        {
+          "path": "dist/esm/apis/turn-api.js",
+          "bytes": 99
+        },
+        {
+          "path": "dist/esm/apis/users-api.js",
+          "bytes": 132
+        },
+        {
+          "path": "dist/esm/auth/doover-auth.js",
+          "bytes": 166
+        },
+        {
+          "path": "dist/esm/auth/cookie-auth.js",
+          "bytes": 1989
+        },
+        {
+          "path": "dist/esm/auth/errors.js",
+          "bytes": 80
+        },
+        {
+          "path": "dist/esm/auth/jwt.js",
+          "bytes": 276
+        },
+        {
+          "path": "dist/esm/auth/doover-token-auth.js",
+          "bytes": 3755
+        },
+        {
+          "path": "dist/esm/auth/build-auth.js",
+          "bytes": 1313
+        },
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 364
+        },
+        {
+          "path": "dist/esm/gateway/gateway-client.js",
+          "bytes": 7371
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        },
+        {
+          "path": "dist/esm/rpc/errors.js",
+          "bytes": 275
+        },
+        {
+          "path": "dist/esm/rpc/rpc-dispatcher.js",
+          "bytes": 2274
+        },
+        {
+          "path": "dist/esm/viewer/path-parsing.js",
+          "bytes": 335
+        },
+        {
+          "path": "dist/esm/viewer/doover-data-provider.js",
+          "bytes": 3349
+        },
+        {
+          "path": "dist/esm/client/capabilities.js",
+          "bytes": 749
+        },
+        {
+          "path": "dist/esm/client/provenance.js",
+          "bytes": 1499
+        },
+        {
+          "path": "dist/esm/client/status-tracker.js",
+          "bytes": 1249
+        },
+        {
+          "path": "dist/esm/client/stats.js",
+          "bytes": 2393
+        },
+        {
+          "path": "dist/esm/client/doover-client.js",
+          "bytes": 2148
+        }
+      ],
+      "baselineMinifiedBytes": 121411,
+      "baselineGzipBytes": 27999
+    },
+    {
+      "name": "client-subpath",
+      "minifiedBytes": 55413,
+      "gzipBytes": 13708,
+      "budgetBytes": 68000,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 392
+        },
+        {
+          "path": "dist/esm/apis/agents-api.js",
+          "bytes": 4567
+        },
+        {
+          "path": "dist/esm/client/request-options.js",
+          "bytes": 175
+        },
+        {
+          "path": "dist/esm/apis/_args.js",
+          "bytes": 375
+        },
+        {
+          "path": "dist/esm/types/batch.js",
+          "bytes": 300
+        },
+        {
+          "path": "dist/esm/apis/aggregates-api.js",
+          "bytes": 1283
+        },
+        {
+          "path": "dist/esm/apis/alarms-api.js",
+          "bytes": 1525
+        },
+        {
+          "path": "dist/esm/apis/channels-api.js",
+          "bytes": 1329
+        },
+        {
+          "path": "dist/esm/apis/connections-api.js",
+          "bytes": 1030
+        },
+        {
+          "path": "dist/esm/apis/messages-api.js",
+          "bytes": 3454
+        },
+        {
+          "path": "dist/esm/apis/notifications-api.js",
+          "bytes": 4481
+        },
+        {
+          "path": "dist/esm/apis/organisations-api.js",
+          "bytes": 531
+        },
+        {
+          "path": "dist/esm/apis/permissions-api.js",
+          "bytes": 430
+        },
+        {
+          "path": "dist/esm/apis/processors-api.js",
+          "bytes": 2595
+        },
+        {
+          "path": "dist/esm/apis/turn-api.js",
+          "bytes": 99
+        },
+        {
+          "path": "dist/esm/apis/users-api.js",
+          "bytes": 132
+        },
+        {
+          "path": "dist/esm/auth/doover-auth.js",
+          "bytes": 166
+        },
+        {
+          "path": "dist/esm/auth/cookie-auth.js",
+          "bytes": 1989
+        },
+        {
+          "path": "dist/esm/auth/errors.js",
+          "bytes": 80
+        },
+        {
+          "path": "dist/esm/auth/jwt.js",
+          "bytes": 276
+        },
+        {
+          "path": "dist/esm/auth/doover-token-auth.js",
+          "bytes": 3755
+        },
+        {
+          "path": "dist/esm/auth/build-auth.js",
+          "bytes": 1313
+        },
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 364
+        },
+        {
+          "path": "dist/esm/gateway/gateway-client.js",
+          "bytes": 7371
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        },
+        {
+          "path": "dist/esm/rpc/errors.js",
+          "bytes": 275
+        },
+        {
+          "path": "dist/esm/rpc/rpc-dispatcher.js",
+          "bytes": 2274
+        },
+        {
+          "path": "dist/esm/viewer/path-parsing.js",
+          "bytes": 335
+        },
+        {
+          "path": "dist/esm/viewer/doover-data-provider.js",
+          "bytes": 3349
+        },
+        {
+          "path": "dist/esm/client/capabilities.js",
+          "bytes": 749
+        },
+        {
+          "path": "dist/esm/client/provenance.js",
+          "bytes": 1499
+        },
+        {
+          "path": "dist/esm/client/status-tracker.js",
+          "bytes": 1249
+        },
+        {
+          "path": "dist/esm/client/stats.js",
+          "bytes": 2393
+        },
+        {
+          "path": "dist/esm/client/doover-client.js",
+          "bytes": 2148
+        }
+      ],
+      "baselineMinifiedBytes": 121411,
+      "baselineGzipBytes": 27999
+    },
+    {
+      "name": "startup-root",
+      "minifiedBytes": 55888,
+      "gzipBytes": 13912,
+      "budgetBytes": 68000,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 392
+        },
+        {
+          "path": "dist/esm/apis/agents-api.js",
+          "bytes": 4567
+        },
+        {
+          "path": "dist/esm/client/request-options.js",
+          "bytes": 175
+        },
+        {
+          "path": "dist/esm/apis/_args.js",
+          "bytes": 375
+        },
+        {
+          "path": "dist/esm/types/batch.js",
+          "bytes": 300
+        },
+        {
+          "path": "dist/esm/apis/aggregates-api.js",
+          "bytes": 1283
+        },
+        {
+          "path": "dist/esm/apis/alarms-api.js",
+          "bytes": 1525
+        },
+        {
+          "path": "dist/esm/apis/channels-api.js",
+          "bytes": 1329
+        },
+        {
+          "path": "dist/esm/apis/connections-api.js",
+          "bytes": 1030
+        },
+        {
+          "path": "dist/esm/apis/messages-api.js",
+          "bytes": 3454
+        },
+        {
+          "path": "dist/esm/apis/notifications-api.js",
+          "bytes": 4481
+        },
+        {
+          "path": "dist/esm/apis/organisations-api.js",
+          "bytes": 531
+        },
+        {
+          "path": "dist/esm/apis/permissions-api.js",
+          "bytes": 430
+        },
+        {
+          "path": "dist/esm/apis/processors-api.js",
+          "bytes": 2595
+        },
+        {
+          "path": "dist/esm/apis/turn-api.js",
+          "bytes": 99
+        },
+        {
+          "path": "dist/esm/apis/users-api.js",
+          "bytes": 132
+        },
+        {
+          "path": "dist/esm/auth/doover-auth.js",
+          "bytes": 166
+        },
+        {
+          "path": "dist/esm/auth/cookie-auth.js",
+          "bytes": 1989
+        },
+        {
+          "path": "dist/esm/auth/errors.js",
+          "bytes": 80
+        },
+        {
+          "path": "dist/esm/auth/jwt.js",
+          "bytes": 276
+        },
+        {
+          "path": "dist/esm/auth/doover-token-auth.js",
+          "bytes": 3755
+        },
+        {
+          "path": "dist/esm/auth/build-auth.js",
+          "bytes": 1313
+        },
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 364
+        },
+        {
+          "path": "dist/esm/gateway/gateway-client.js",
+          "bytes": 7371
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        },
+        {
+          "path": "dist/esm/rpc/errors.js",
+          "bytes": 275
+        },
+        {
+          "path": "dist/esm/rpc/rpc-dispatcher.js",
+          "bytes": 2274
+        },
+        {
+          "path": "dist/esm/viewer/path-parsing.js",
+          "bytes": 335
+        },
+        {
+          "path": "dist/esm/viewer/doover-data-provider.js",
+          "bytes": 3349
+        },
+        {
+          "path": "dist/esm/client/capabilities.js",
+          "bytes": 749
+        },
+        {
+          "path": "dist/esm/client/provenance.js",
+          "bytes": 1499
+        },
+        {
+          "path": "dist/esm/client/status-tracker.js",
+          "bytes": 1249
+        },
+        {
+          "path": "dist/esm/client/stats.js",
+          "bytes": 2393
+        },
+        {
+          "path": "dist/esm/client/doover-client.js",
+          "bytes": 2148
+        },
+        {
+          "path": "dist/esm/client/singleton.js",
+          "bytes": 472
+        }
+      ],
+      "baselineMinifiedBytes": 121423,
+      "baselineGzipBytes": 27999
+    },
+    {
+      "name": "startup-subpath",
+      "minifiedBytes": 55888,
+      "gzipBytes": 13912,
+      "budgetBytes": 68000,
+      "externalPeers": false,
+      "contributors": [
+        {
+          "path": "dist/esm/utils/snowflake.js",
+          "bytes": 392
+        },
+        {
+          "path": "dist/esm/apis/agents-api.js",
+          "bytes": 4567
+        },
+        {
+          "path": "dist/esm/client/request-options.js",
+          "bytes": 175
+        },
+        {
+          "path": "dist/esm/apis/_args.js",
+          "bytes": 375
+        },
+        {
+          "path": "dist/esm/types/batch.js",
+          "bytes": 300
+        },
+        {
+          "path": "dist/esm/apis/aggregates-api.js",
+          "bytes": 1283
+        },
+        {
+          "path": "dist/esm/apis/alarms-api.js",
+          "bytes": 1525
+        },
+        {
+          "path": "dist/esm/apis/channels-api.js",
+          "bytes": 1329
+        },
+        {
+          "path": "dist/esm/apis/connections-api.js",
+          "bytes": 1030
+        },
+        {
+          "path": "dist/esm/apis/messages-api.js",
+          "bytes": 3454
+        },
+        {
+          "path": "dist/esm/apis/notifications-api.js",
+          "bytes": 4481
+        },
+        {
+          "path": "dist/esm/apis/organisations-api.js",
+          "bytes": 531
+        },
+        {
+          "path": "dist/esm/apis/permissions-api.js",
+          "bytes": 430
+        },
+        {
+          "path": "dist/esm/apis/processors-api.js",
+          "bytes": 2595
+        },
+        {
+          "path": "dist/esm/apis/turn-api.js",
+          "bytes": 99
+        },
+        {
+          "path": "dist/esm/apis/users-api.js",
+          "bytes": 132
+        },
+        {
+          "path": "dist/esm/auth/doover-auth.js",
+          "bytes": 166
+        },
+        {
+          "path": "dist/esm/auth/cookie-auth.js",
+          "bytes": 1989
+        },
+        {
+          "path": "dist/esm/auth/errors.js",
+          "bytes": 80
+        },
+        {
+          "path": "dist/esm/auth/jwt.js",
+          "bytes": 276
+        },
+        {
+          "path": "dist/esm/auth/doover-token-auth.js",
+          "bytes": 3755
+        },
+        {
+          "path": "dist/esm/auth/build-auth.js",
+          "bytes": 1313
+        },
+        {
+          "path": "dist/esm/http/errors.js",
+          "bytes": 364
+        },
+        {
+          "path": "dist/esm/gateway/gateway-client.js",
+          "bytes": 7371
+        },
+        {
+          "path": "dist/esm/http/rest-client.js",
+          "bytes": 3102
+        },
+        {
+          "path": "dist/esm/rpc/errors.js",
+          "bytes": 275
+        },
+        {
+          "path": "dist/esm/rpc/rpc-dispatcher.js",
+          "bytes": 2274
+        },
+        {
+          "path": "dist/esm/viewer/path-parsing.js",
+          "bytes": 335
+        },
+        {
+          "path": "dist/esm/viewer/doover-data-provider.js",
+          "bytes": 3349
+        },
+        {
+          "path": "dist/esm/client/capabilities.js",
+          "bytes": 749
+        },
+        {
+          "path": "dist/esm/client/provenance.js",
+          "bytes": 1499
+        },
+        {
+          "path": "dist/esm/client/status-tracker.js",
+          "bytes": 1249
+        },
+        {
+          "path": "dist/esm/client/stats.js",
+          "bytes": 2393
+        },
+        {
+          "path": "dist/esm/client/doover-client.js",
+          "bytes": 2148
+        },
+        {
+          "path": "dist/esm/client/singleton.js",
+          "bytes": 472
+        }
+      ],
+      "baselineMinifiedBytes": 121423,
+      "baselineGzipBytes": 27999
+    },
+    {
+      "name": "react-status",
+      "minifiedBytes": 411,
+      "gzipBytes": 267,
+      "budgetBytes": 750,
+      "externalPeers": true,
+      "contributors": [
+        {
+          "path": "dist/esm/react/useClientStatus.js",
+          "bytes": 157
+        },
+        {
+          "path": "dist/esm/react/context.js",
+          "bytes": 224
+        }
+      ],
+      "baselineMinifiedBytes": 28655,
+      "baselineGzipBytes": 8123
+    }
+  ],
+  "baselinePackage": {
+    "packedBytes": 188023,
+    "unpackedBytes": 905625,
+    "packedFileCount": 261,
+    "testFileCount": 102,
+    "testBytes": 345542
+  }
+}

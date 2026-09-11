@@ -1,6 +1,6 @@
-import type { MessagesApi } from "../apis/messages-api";
-import type { DooverStatsCollector } from "../client/stats";
-import type { ChannelHandlers, GatewayClient } from "../gateway/gateway-client";
+import type { MessagesApi } from "../apis/messages-api.js";
+import type { DooverStatsCollector } from "../client/stats.js";
+import type { ChannelHandlers, GatewayClient } from "../gateway/gateway-client.js";
 import type {
   ChannelRef,
   JSONValue,
@@ -8,8 +8,8 @@ import type {
   RpcMessageData,
   RpcRequest,
   RpcStatus,
-} from "../types/common";
-import { DooverRpcError } from "./errors";
+} from "../types/common.js";
+import { DooverRpcError } from "./errors.js";
 
 export interface SendRpcOptions<TPending = undefined> {
   onStatus?: (status: RpcStatus<TPending>) => void;

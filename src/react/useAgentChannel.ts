@@ -1,8 +1,8 @@
-import type { Aggregate } from "../types/common";
+import type { Aggregate } from "../types/common.js";
 import {
   useChannelAggregate,
   type UseChannelAggregateOptions,
-} from "./useChannelAggregate";
+} from "./useChannelAggregate.js";
 
 /**
  * Convenience wrapper around `useChannelAggregate` that accepts an agent id

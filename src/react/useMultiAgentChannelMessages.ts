@@ -6,8 +6,8 @@ import {
   type UseInfiniteQueryResult,
 } from "@tanstack/react-query";
 
-import type { MessageStructure } from "../types/common";
-import { useDooverClient } from "./context";
+import type { MessageStructure } from "../types/common.js";
+import { useDooverClient } from "./context.js";
 
 export function multiAgentChannelMessagesQueryKey(
   channelName: string,

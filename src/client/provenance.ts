@@ -2,7 +2,7 @@ import type {
   SourceProvenance,
   SourceProvenanceViaGateway,
   SourceProvenanceViaRest,
-} from "../types/provenance";
+} from "../types/provenance.js";
 
 /** A stamped value: adds `__source` to plain objects and their array elements.
  *  For object values, also adds `__source` to any known nested-object props

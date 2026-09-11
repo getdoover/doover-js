@@ -6,14 +6,14 @@ import {
   type UseInfiniteQueryResult,
 } from "@tanstack/react-query";
 
-import type { MessageStructure } from "../types/common";
-import type { ChannelIdentifier } from "../types/viewer";
-import type { ListMessagesParams } from "../apis/messages-api";
-import { generateSnowflakeIdAtTime } from "../utils/snowflake";
-import { getChannelRangeStore } from "./messageRangeStore";
-import { useDooverClient } from "./context";
-import { useChannelSubscription } from "./useChannelSubscription";
-import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus";
+import type { MessageStructure } from "../types/common.js";
+import type { ChannelIdentifier } from "../types/viewer.js";
+import type { ListMessagesParams } from "../apis/messages-api.js";
+import { generateSnowflakeIdAtTime } from "../utils/snowflake.js";
+import { getChannelRangeStore } from "./messageRangeStore.js";
+import { useDooverClient } from "./context.js";
+import { useChannelSubscription } from "./useChannelSubscription.js";
+import { useOfflineStatus, type OfflineStatusSnapshot } from "./useOfflineStatus.js";
 
 export function channelMessagesQueryKey(
   agentId: string | undefined,

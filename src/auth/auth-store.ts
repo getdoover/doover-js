@@ -1,4 +1,4 @@
-import type { AuthProfile } from "./auth-profile";
+import type { AuthProfile } from "./auth-profile.js";
 
 /**
  * Structural interface for profile stores accepted by auth classes.

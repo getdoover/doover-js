@@ -1,13 +1,13 @@
-import type { RestClient } from "../http/rest-client";
-import type { Aggregate } from "../types/openapi";
-import { resolveChannelArgs } from "./_args";
-import type { DooverRequestOptions } from "../client/request-options";
+import type { RestClient } from "../http/rest-client.js";
+import type { Aggregate } from "../types/openapi.js";
+import { resolveChannelArgs } from "./_args.js";
+import type { DooverRequestOptions } from "../client/request-options.js";
 import {
   chunkBatchItems,
   mergeBatchResponses,
   type BatchAggregateResponse,
   type BatchAggregateUpdateItem,
-} from "../types/batch";
+} from "../types/batch.js";
 
 export interface AggregateMutationParams {
   suppress_response?: boolean;

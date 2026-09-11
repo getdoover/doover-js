@@ -1,26 +1,647 @@
 {
   "name": "doover-js",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "TypeScript client for Doover.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.js",
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
       "default": "./dist/index.js"
     },
     "./node": {
-      "types": "./dist/node/index.d.ts",
+      "module": "./dist/esm/node/index.js",
+      "import": {
+        "types": "./dist/esm/node/index.d.ts",
+        "default": "./dist/esm/node/index.js"
+      },
+      "require": {
+        "types": "./dist/node/index.d.ts",
+        "default": "./dist/node/index.js"
+      },
       "default": "./dist/node/index.js"
     },
     "./react": {
-      "types": "./dist/react/index.d.ts",
+      "module": "./dist/esm/react/index.js",
+      "import": {
+        "types": "./dist/esm/react/index.d.ts",
+        "default": "./dist/esm/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
       "default": "./dist/react/index.js"
     },
     "./refine": {
-      "types": "./dist/refine/index.d.ts",
+      "module": "./dist/esm/refine/index.js",
+      "import": {
+        "types": "./dist/esm/refine/index.d.ts",
+        "default": "./dist/esm/refine/index.js"
+      },
+      "require": {
+        "types": "./dist/refine/index.d.ts",
+        "default": "./dist/refine/index.js"
+      },
       "default": "./dist/refine/index.js"
-    }
+    },
+    "./client": {
+      "module": "./dist/esm/client/index.js",
+      "import": {
+        "types": "./dist/esm/client/index.d.ts",
+        "default": "./dist/esm/client/index.js"
+      },
+      "require": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
+      },
+      "default": "./dist/client/index.js"
+    },
+    "./local": {
+      "module": "./dist/esm/client/local-agent-client.js",
+      "import": {
+        "types": "./dist/esm/client/local-agent-client.d.ts",
+        "default": "./dist/esm/client/local-agent-client.js"
+      },
+      "require": {
+        "types": "./dist/client/local-agent-client.d.ts",
+        "default": "./dist/client/local-agent-client.js"
+      },
+      "default": "./dist/client/local-agent-client.js"
+    },
+    "./multiplex": {
+      "module": "./dist/esm/client/multiplex-client.js",
+      "import": {
+        "types": "./dist/esm/client/multiplex-client.d.ts",
+        "default": "./dist/esm/client/multiplex-client.js"
+      },
+      "require": {
+        "types": "./dist/client/multiplex-client.d.ts",
+        "default": "./dist/client/multiplex-client.js"
+      },
+      "default": "./dist/client/multiplex-client.js"
+    },
+    "./offline": {
+      "module": "./dist/esm/client/offline-cache.js",
+      "import": {
+        "types": "./dist/esm/client/offline-cache.d.ts",
+        "default": "./dist/esm/client/offline-cache.js"
+      },
+      "require": {
+        "types": "./dist/client/offline-cache.d.ts",
+        "default": "./dist/client/offline-cache.js"
+      },
+      "default": "./dist/client/offline-cache.js"
+    },
+    "./http": {
+      "module": "./dist/esm/http/index.js",
+      "import": {
+        "types": "./dist/esm/http/index.d.ts",
+        "default": "./dist/esm/http/index.js"
+      },
+      "require": {
+        "types": "./dist/http/index.d.ts",
+        "default": "./dist/http/index.js"
+      },
+      "default": "./dist/http/index.js"
+    },
+    "./gateway": {
+      "module": "./dist/esm/gateway/index.js",
+      "import": {
+        "types": "./dist/esm/gateway/index.d.ts",
+        "default": "./dist/esm/gateway/index.js"
+      },
+      "require": {
+        "types": "./dist/gateway/index.d.ts",
+        "default": "./dist/gateway/index.js"
+      },
+      "default": "./dist/gateway/index.js"
+    },
+    "./auth": {
+      "module": "./dist/esm/auth/index.js",
+      "import": {
+        "types": "./dist/esm/auth/index.d.ts",
+        "default": "./dist/esm/auth/index.js"
+      },
+      "require": {
+        "types": "./dist/auth/index.d.ts",
+        "default": "./dist/auth/index.js"
+      },
+      "default": "./dist/auth/index.js"
+    },
+    "./rpc": {
+      "module": "./dist/esm/rpc/index.js",
+      "import": {
+        "types": "./dist/esm/rpc/index.d.ts",
+        "default": "./dist/esm/rpc/index.js"
+      },
+      "require": {
+        "types": "./dist/rpc/index.d.ts",
+        "default": "./dist/rpc/index.js"
+      },
+      "default": "./dist/rpc/index.js"
+    },
+    "./utils": {
+      "module": "./dist/esm/utils/snowflake.js",
+      "import": {
+        "types": "./dist/esm/utils/snowflake.d.ts",
+        "default": "./dist/esm/utils/snowflake.js"
+      },
+      "require": {
+        "types": "./dist/utils/snowflake.d.ts",
+        "default": "./dist/utils/snowflake.js"
+      },
+      "default": "./dist/utils/snowflake.js"
+    },
+    "./batch": {
+      "module": "./dist/esm/types/batch.js",
+      "import": {
+        "types": "./dist/esm/types/batch.d.ts",
+        "default": "./dist/esm/types/batch.js"
+      },
+      "require": {
+        "types": "./dist/types/batch.d.ts",
+        "default": "./dist/types/batch.js"
+      },
+      "default": "./dist/types/batch.js"
+    },
+    "./types": {
+      "module": "./dist/esm/types/index.js",
+      "import": {
+        "types": "./dist/esm/types/index.d.ts",
+        "default": "./dist/esm/types/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/types/index.js"
+      },
+      "default": "./dist/types/index.js"
+    },
+    "./capabilities": {
+      "module": "./dist/esm/client/capabilities.js",
+      "import": {
+        "types": "./dist/esm/client/capabilities.d.ts",
+        "default": "./dist/esm/client/capabilities.js"
+      },
+      "require": {
+        "types": "./dist/client/capabilities.d.ts",
+        "default": "./dist/client/capabilities.js"
+      },
+      "default": "./dist/client/capabilities.js"
+    },
+    "./errors": {
+      "module": "./dist/esm/client/errors.js",
+      "import": {
+        "types": "./dist/esm/client/errors.d.ts",
+        "default": "./dist/esm/client/errors.js"
+      },
+      "require": {
+        "types": "./dist/client/errors.d.ts",
+        "default": "./dist/client/errors.js"
+      },
+      "default": "./dist/client/errors.js"
+    },
+    "./request-options": {
+      "module": "./dist/esm/client/request-options.js",
+      "import": {
+        "types": "./dist/esm/client/request-options.d.ts",
+        "default": "./dist/esm/client/request-options.js"
+      },
+      "require": {
+        "types": "./dist/client/request-options.d.ts",
+        "default": "./dist/client/request-options.js"
+      },
+      "default": "./dist/client/request-options.js"
+    },
+    "./stats": {
+      "module": "./dist/esm/client/stats.js",
+      "import": {
+        "types": "./dist/esm/client/stats.d.ts",
+        "default": "./dist/esm/client/stats.js"
+      },
+      "require": {
+        "types": "./dist/client/stats.d.ts",
+        "default": "./dist/client/stats.js"
+      },
+      "default": "./dist/client/stats.js"
+    },
+    "./viewer": {
+      "module": "./dist/esm/viewer/doover-data-provider.js",
+      "import": {
+        "types": "./dist/esm/viewer/doover-data-provider.d.ts",
+        "default": "./dist/esm/viewer/doover-data-provider.js"
+      },
+      "require": {
+        "types": "./dist/viewer/doover-data-provider.d.ts",
+        "default": "./dist/viewer/doover-data-provider.js"
+      },
+      "default": "./dist/viewer/doover-data-provider.js"
+    },
+    "./apis/agents": {
+      "module": "./dist/esm/apis/agents-api.js",
+      "import": {
+        "types": "./dist/esm/apis/agents-api.d.ts",
+        "default": "./dist/esm/apis/agents-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/agents-api.d.ts",
+        "default": "./dist/apis/agents-api.js"
+      },
+      "default": "./dist/apis/agents-api.js"
+    },
+    "./apis/aggregates": {
+      "module": "./dist/esm/apis/aggregates-api.js",
+      "import": {
+        "types": "./dist/esm/apis/aggregates-api.d.ts",
+        "default": "./dist/esm/apis/aggregates-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/aggregates-api.d.ts",
+        "default": "./dist/apis/aggregates-api.js"
+      },
+      "default": "./dist/apis/aggregates-api.js"
+    },
+    "./apis/alarms": {
+      "module": "./dist/esm/apis/alarms-api.js",
+      "import": {
+        "types": "./dist/esm/apis/alarms-api.d.ts",
+        "default": "./dist/esm/apis/alarms-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/alarms-api.d.ts",
+        "default": "./dist/apis/alarms-api.js"
+      },
+      "default": "./dist/apis/alarms-api.js"
+    },
+    "./apis/channels": {
+      "module": "./dist/esm/apis/channels-api.js",
+      "import": {
+        "types": "./dist/esm/apis/channels-api.d.ts",
+        "default": "./dist/esm/apis/channels-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/channels-api.d.ts",
+        "default": "./dist/apis/channels-api.js"
+      },
+      "default": "./dist/apis/channels-api.js"
+    },
+    "./apis/connections": {
+      "module": "./dist/esm/apis/connections-api.js",
+      "import": {
+        "types": "./dist/esm/apis/connections-api.d.ts",
+        "default": "./dist/esm/apis/connections-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/connections-api.d.ts",
+        "default": "./dist/apis/connections-api.js"
+      },
+      "default": "./dist/apis/connections-api.js"
+    },
+    "./apis/messages": {
+      "module": "./dist/esm/apis/messages-api.js",
+      "import": {
+        "types": "./dist/esm/apis/messages-api.d.ts",
+        "default": "./dist/esm/apis/messages-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/messages-api.d.ts",
+        "default": "./dist/apis/messages-api.js"
+      },
+      "default": "./dist/apis/messages-api.js"
+    },
+    "./apis/notifications": {
+      "module": "./dist/esm/apis/notifications-api.js",
+      "import": {
+        "types": "./dist/esm/apis/notifications-api.d.ts",
+        "default": "./dist/esm/apis/notifications-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/notifications-api.d.ts",
+        "default": "./dist/apis/notifications-api.js"
+      },
+      "default": "./dist/apis/notifications-api.js"
+    },
+    "./apis/organisations": {
+      "module": "./dist/esm/apis/organisations-api.js",
+      "import": {
+        "types": "./dist/esm/apis/organisations-api.d.ts",
+        "default": "./dist/esm/apis/organisations-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/organisations-api.d.ts",
+        "default": "./dist/apis/organisations-api.js"
+      },
+      "default": "./dist/apis/organisations-api.js"
+    },
+    "./apis/permissions": {
+      "module": "./dist/esm/apis/permissions-api.js",
+      "import": {
+        "types": "./dist/esm/apis/permissions-api.d.ts",
+        "default": "./dist/esm/apis/permissions-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/permissions-api.d.ts",
+        "default": "./dist/apis/permissions-api.js"
+      },
+      "default": "./dist/apis/permissions-api.js"
+    },
+    "./apis/processors": {
+      "module": "./dist/esm/apis/processors-api.js",
+      "import": {
+        "types": "./dist/esm/apis/processors-api.d.ts",
+        "default": "./dist/esm/apis/processors-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/processors-api.d.ts",
+        "default": "./dist/apis/processors-api.js"
+      },
+      "default": "./dist/apis/processors-api.js"
+    },
+    "./apis/turn": {
+      "module": "./dist/esm/apis/turn-api.js",
+      "import": {
+        "types": "./dist/esm/apis/turn-api.d.ts",
+        "default": "./dist/esm/apis/turn-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/turn-api.d.ts",
+        "default": "./dist/apis/turn-api.js"
+      },
+      "default": "./dist/apis/turn-api.js"
+    },
+    "./apis/users": {
+      "module": "./dist/esm/apis/users-api.js",
+      "import": {
+        "types": "./dist/esm/apis/users-api.d.ts",
+        "default": "./dist/esm/apis/users-api.js"
+      },
+      "require": {
+        "types": "./dist/apis/users-api.d.ts",
+        "default": "./dist/apis/users-api.js"
+      },
+      "default": "./dist/apis/users-api.js"
+    },
+    "./react/context": {
+      "module": "./dist/esm/react/context.js",
+      "import": {
+        "types": "./dist/esm/react/context.d.ts",
+        "default": "./dist/esm/react/context.js"
+      },
+      "require": {
+        "types": "./dist/react/context.d.ts",
+        "default": "./dist/react/context.js"
+      },
+      "default": "./dist/react/context.js"
+    },
+    "./react/sharedQueryClient": {
+      "module": "./dist/esm/react/sharedQueryClient.js",
+      "import": {
+        "types": "./dist/esm/react/sharedQueryClient.d.ts",
+        "default": "./dist/esm/react/sharedQueryClient.js"
+      },
+      "require": {
+        "types": "./dist/react/sharedQueryClient.d.ts",
+        "default": "./dist/react/sharedQueryClient.js"
+      },
+      "default": "./dist/react/sharedQueryClient.js"
+    },
+    "./react/useAgentChannel": {
+      "module": "./dist/esm/react/useAgentChannel.js",
+      "import": {
+        "types": "./dist/esm/react/useAgentChannel.d.ts",
+        "default": "./dist/esm/react/useAgentChannel.js"
+      },
+      "require": {
+        "types": "./dist/react/useAgentChannel.d.ts",
+        "default": "./dist/react/useAgentChannel.js"
+      },
+      "default": "./dist/react/useAgentChannel.js"
+    },
+    "./react/useAgentConnections": {
+      "module": "./dist/esm/react/useAgentConnections.js",
+      "import": {
+        "types": "./dist/esm/react/useAgentConnections.d.ts",
+        "default": "./dist/esm/react/useAgentConnections.js"
+      },
+      "require": {
+        "types": "./dist/react/useAgentConnections.d.ts",
+        "default": "./dist/react/useAgentConnections.js"
+      },
+      "default": "./dist/react/useAgentConnections.js"
+    },
+    "./react/useAgentTokenState": {
+      "module": "./dist/esm/react/useAgentTokenState.js",
+      "import": {
+        "types": "./dist/esm/react/useAgentTokenState.d.ts",
+        "default": "./dist/esm/react/useAgentTokenState.js"
+      },
+      "require": {
+        "types": "./dist/react/useAgentTokenState.d.ts",
+        "default": "./dist/react/useAgentTokenState.js"
+      },
+      "default": "./dist/react/useAgentTokenState.js"
+    },
+    "./react/useChannelAggregate": {
+      "module": "./dist/esm/react/useChannelAggregate.js",
+      "import": {
+        "types": "./dist/esm/react/useChannelAggregate.d.ts",
+        "default": "./dist/esm/react/useChannelAggregate.js"
+      },
+      "require": {
+        "types": "./dist/react/useChannelAggregate.d.ts",
+        "default": "./dist/react/useChannelAggregate.js"
+      },
+      "default": "./dist/react/useChannelAggregate.js"
+    },
+    "./react/useChannelMessage": {
+      "module": "./dist/esm/react/useChannelMessage.js",
+      "import": {
+        "types": "./dist/esm/react/useChannelMessage.d.ts",
+        "default": "./dist/esm/react/useChannelMessage.js"
+      },
+      "require": {
+        "types": "./dist/react/useChannelMessage.d.ts",
+        "default": "./dist/react/useChannelMessage.js"
+      },
+      "default": "./dist/react/useChannelMessage.js"
+    },
+    "./react/useChannelMessages": {
+      "module": "./dist/esm/react/useChannelMessages.js",
+      "import": {
+        "types": "./dist/esm/react/useChannelMessages.d.ts",
+        "default": "./dist/esm/react/useChannelMessages.js"
+      },
+      "require": {
+        "types": "./dist/react/useChannelMessages.d.ts",
+        "default": "./dist/react/useChannelMessages.js"
+      },
+      "default": "./dist/react/useChannelMessages.js"
+    },
+    "./react/useChannelSubscription": {
+      "module": "./dist/esm/react/useChannelSubscription.js",
+      "import": {
+        "types": "./dist/esm/react/useChannelSubscription.d.ts",
+        "default": "./dist/esm/react/useChannelSubscription.js"
+      },
+      "require": {
+        "types": "./dist/react/useChannelSubscription.d.ts",
+        "default": "./dist/react/useChannelSubscription.js"
+      },
+      "default": "./dist/react/useChannelSubscription.js"
+    },
+    "./react/useClientStatus": {
+      "module": "./dist/esm/react/useClientStatus.js",
+      "import": {
+        "types": "./dist/esm/react/useClientStatus.d.ts",
+        "default": "./dist/esm/react/useClientStatus.js"
+      },
+      "require": {
+        "types": "./dist/react/useClientStatus.d.ts",
+        "default": "./dist/react/useClientStatus.js"
+      },
+      "default": "./dist/react/useClientStatus.js"
+    },
+    "./react/useConnectionState": {
+      "module": "./dist/esm/react/useConnectionState.js",
+      "import": {
+        "types": "./dist/esm/react/useConnectionState.d.ts",
+        "default": "./dist/esm/react/useConnectionState.js"
+      },
+      "require": {
+        "types": "./dist/react/useConnectionState.d.ts",
+        "default": "./dist/react/useConnectionState.js"
+      },
+      "default": "./dist/react/useConnectionState.js"
+    },
+    "./react/useDeviceMap": {
+      "module": "./dist/esm/react/useDeviceMap.js",
+      "import": {
+        "types": "./dist/esm/react/useDeviceMap.d.ts",
+        "default": "./dist/esm/react/useDeviceMap.js"
+      },
+      "require": {
+        "types": "./dist/react/useDeviceMap.d.ts",
+        "default": "./dist/react/useDeviceMap.js"
+      },
+      "default": "./dist/react/useDeviceMap.js"
+    },
+    "./react/useInvocationLogs": {
+      "module": "./dist/esm/react/useInvocationLogs.js",
+      "import": {
+        "types": "./dist/esm/react/useInvocationLogs.d.ts",
+        "default": "./dist/esm/react/useInvocationLogs.js"
+      },
+      "require": {
+        "types": "./dist/react/useInvocationLogs.d.ts",
+        "default": "./dist/react/useInvocationLogs.js"
+      },
+      "default": "./dist/react/useInvocationLogs.js"
+    },
+    "./react/useMultiAgentAggregates": {
+      "module": "./dist/esm/react/useMultiAgentAggregates.js",
+      "import": {
+        "types": "./dist/esm/react/useMultiAgentAggregates.d.ts",
+        "default": "./dist/esm/react/useMultiAgentAggregates.js"
+      },
+      "require": {
+        "types": "./dist/react/useMultiAgentAggregates.d.ts",
+        "default": "./dist/react/useMultiAgentAggregates.js"
+      },
+      "default": "./dist/react/useMultiAgentAggregates.js"
+    },
+    "./react/useMultiAgentChannelMessages": {
+      "module": "./dist/esm/react/useMultiAgentChannelMessages.js",
+      "import": {
+        "types": "./dist/esm/react/useMultiAgentChannelMessages.d.ts",
+        "default": "./dist/esm/react/useMultiAgentChannelMessages.js"
+      },
+      "require": {
+        "types": "./dist/react/useMultiAgentChannelMessages.d.ts",
+        "default": "./dist/react/useMultiAgentChannelMessages.js"
+      },
+      "default": "./dist/react/useMultiAgentChannelMessages.js"
+    },
+    "./react/useOfflineStatus": {
+      "module": "./dist/esm/react/useOfflineStatus.js",
+      "import": {
+        "types": "./dist/esm/react/useOfflineStatus.d.ts",
+        "default": "./dist/esm/react/useOfflineStatus.js"
+      },
+      "require": {
+        "types": "./dist/react/useOfflineStatus.d.ts",
+        "default": "./dist/react/useOfflineStatus.js"
+      },
+      "default": "./dist/react/useOfflineStatus.js"
+    },
+    "./react/useSendMessage": {
+      "module": "./dist/esm/react/useSendMessage.js",
+      "import": {
+        "types": "./dist/esm/react/useSendMessage.d.ts",
+        "default": "./dist/esm/react/useSendMessage.js"
+      },
+      "require": {
+        "types": "./dist/react/useSendMessage.d.ts",
+        "default": "./dist/react/useSendMessage.js"
+      },
+      "default": "./dist/react/useSendMessage.js"
+    },
+    "./react/useSendRpc": {
+      "module": "./dist/esm/react/useSendRpc.js",
+      "import": {
+        "types": "./dist/esm/react/useSendRpc.d.ts",
+        "default": "./dist/esm/react/useSendRpc.js"
+      },
+      "require": {
+        "types": "./dist/react/useSendRpc.d.ts",
+        "default": "./dist/react/useSendRpc.js"
+      },
+      "default": "./dist/react/useSendRpc.js"
+    },
+    "./react/useTurnCredentials": {
+      "module": "./dist/esm/react/useTurnCredentials.js",
+      "import": {
+        "types": "./dist/esm/react/useTurnCredentials.d.ts",
+        "default": "./dist/esm/react/useTurnCredentials.js"
+      },
+      "require": {
+        "types": "./dist/react/useTurnCredentials.d.ts",
+        "default": "./dist/react/useTurnCredentials.js"
+      },
+      "default": "./dist/react/useTurnCredentials.js"
+    },
+    "./react/useUpdateAggregate": {
+      "module": "./dist/esm/react/useUpdateAggregate.js",
+      "import": {
+        "types": "./dist/esm/react/useUpdateAggregate.d.ts",
+        "default": "./dist/esm/react/useUpdateAggregate.js"
+      },
+      "require": {
+        "types": "./dist/react/useUpdateAggregate.d.ts",
+        "default": "./dist/react/useUpdateAggregate.js"
+      },
+      "default": "./dist/react/useUpdateAggregate.js"
+    },
+    "./react/useUpdateMessage": {
+      "module": "./dist/esm/react/useUpdateMessage.js",
+      "import": {
+        "types": "./dist/esm/react/useUpdateMessage.d.ts",
+        "default": "./dist/esm/react/useUpdateMessage.js"
+      },
+      "require": {
+        "types": "./dist/react/useUpdateMessage.d.ts",
+        "default": "./dist/react/useUpdateMessage.js"
+      },
+      "default": "./dist/react/useUpdateMessage.js"
+    },
+    "./package.json": "./package.json"
   },
   "repository": {
     "type": "git",
@@ -34,12 +655,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.mjs",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
     "test:node": "mocha --exit --require tsx/cjs \"src/test/**/*.test.ts\"",
     "test:react": "mocha --exit --require global-jsdom/register --require tsx/cjs \"src/test/**/*.test.tsx\"",
-    "test": "npm run test:node && npm run test:react"
+    "test": "npm run typecheck && npm run test:node && npm run test:react && npm run test:package",
+    "typecheck": "tsc --noEmit",
+    "test:package": "npm run build && node scripts/check-package.mjs",
+    "size": "npm run build && node scripts/check-package.mjs --report docs/optimisation-sizes.json"
   },
   "keywords": [
     "doover"
@@ -73,6 +697,7 @@
     "@types/sinon": "^17.0.4",
     "chai": "^5.2.1",
     "chai-as-promised": "^8.0.2",
+    "esbuild": "^0.27.7",
     "global-jsdom": "^25.0.0",
     "jsdom": "^25.0.1",
     "mocha": "^11.1.0",
@@ -81,5 +706,167 @@
     "sinon": "^21.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3"
+  },
+  "module": "dist/esm/index.js",
+  "sideEffects": false,
+  "typesVersions": {
+    "*": {
+      "node": [
+        "dist/node/index.d.ts"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ],
+      "refine": [
+        "dist/refine/index.d.ts"
+      ],
+      "client": [
+        "dist/client/index.d.ts"
+      ],
+      "local": [
+        "dist/client/local-agent-client.d.ts"
+      ],
+      "multiplex": [
+        "dist/client/multiplex-client.d.ts"
+      ],
+      "offline": [
+        "dist/client/offline-cache.d.ts"
+      ],
+      "http": [
+        "dist/http/index.d.ts"
+      ],
+      "gateway": [
+        "dist/gateway/index.d.ts"
+      ],
+      "auth": [
+        "dist/auth/index.d.ts"
+      ],
+      "rpc": [
+        "dist/rpc/index.d.ts"
+      ],
+      "utils": [
+        "dist/utils/snowflake.d.ts"
+      ],
+      "batch": [
+        "dist/types/batch.d.ts"
+      ],
+      "types": [
+        "dist/types/index.d.ts"
+      ],
+      "capabilities": [
+        "dist/client/capabilities.d.ts"
+      ],
+      "errors": [
+        "dist/client/errors.d.ts"
+      ],
+      "request-options": [
+        "dist/client/request-options.d.ts"
+      ],
+      "stats": [
+        "dist/client/stats.d.ts"
+      ],
+      "viewer": [
+        "dist/viewer/doover-data-provider.d.ts"
+      ],
+      "apis/agents": [
+        "dist/apis/agents-api.d.ts"
+      ],
+      "apis/aggregates": [
+        "dist/apis/aggregates-api.d.ts"
+      ],
+      "apis/alarms": [
+        "dist/apis/alarms-api.d.ts"
+      ],
+      "apis/channels": [
+        "dist/apis/channels-api.d.ts"
+      ],
+      "apis/connections": [
+        "dist/apis/connections-api.d.ts"
+      ],
+      "apis/messages": [
+        "dist/apis/messages-api.d.ts"
+      ],
+      "apis/notifications": [
+        "dist/apis/notifications-api.d.ts"
+      ],
+      "apis/organisations": [
+        "dist/apis/organisations-api.d.ts"
+      ],
+      "apis/permissions": [
+        "dist/apis/permissions-api.d.ts"
+      ],
+      "apis/processors": [
+        "dist/apis/processors-api.d.ts"
+      ],
+      "apis/turn": [
+        "dist/apis/turn-api.d.ts"
+      ],
+      "apis/users": [
+        "dist/apis/users-api.d.ts"
+      ],
+      "react/context": [
+        "dist/react/context.d.ts"
+      ],
+      "react/sharedQueryClient": [
+        "dist/react/sharedQueryClient.d.ts"
+      ],
+      "react/useAgentChannel": [
+        "dist/react/useAgentChannel.d.ts"
+      ],
+      "react/useAgentConnections": [
+        "dist/react/useAgentConnections.d.ts"
+      ],
+      "react/useAgentTokenState": [
+        "dist/react/useAgentTokenState.d.ts"
+      ],
+      "react/useChannelAggregate": [
+        "dist/react/useChannelAggregate.d.ts"
+      ],
+      "react/useChannelMessage": [
+        "dist/react/useChannelMessage.d.ts"
+      ],
+      "react/useChannelMessages": [
+        "dist/react/useChannelMessages.d.ts"
+      ],
+      "react/useChannelSubscription": [
+        "dist/react/useChannelSubscription.d.ts"
+      ],
+      "react/useClientStatus": [
+        "dist/react/useClientStatus.d.ts"
+      ],
+      "react/useConnectionState": [
+        "dist/react/useConnectionState.d.ts"
+      ],
+      "react/useDeviceMap": [
+        "dist/react/useDeviceMap.d.ts"
+      ],
+      "react/useInvocationLogs": [
+        "dist/react/useInvocationLogs.d.ts"
+      ],
+      "react/useMultiAgentAggregates": [
+        "dist/react/useMultiAgentAggregates.d.ts"
+      ],
+      "react/useMultiAgentChannelMessages": [
+        "dist/react/useMultiAgentChannelMessages.d.ts"
+      ],
+      "react/useOfflineStatus": [
+        "dist/react/useOfflineStatus.d.ts"
+      ],
+      "react/useSendMessage": [
+        "dist/react/useSendMessage.d.ts"
+      ],
+      "react/useSendRpc": [
+        "dist/react/useSendRpc.d.ts"
+      ],
+      "react/useTurnCredentials": [
+        "dist/react/useTurnCredentials.d.ts"
+      ],
+      "react/useUpdateAggregate": [
+        "dist/react/useUpdateAggregate.d.ts"
+      ],
+      "react/useUpdateMessage": [
+        "dist/react/useUpdateMessage.d.ts"
+      ]
+    }
   }
 }
