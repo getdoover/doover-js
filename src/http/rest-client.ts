@@ -1,9 +1,11 @@
+import type { NetworkStatusSource } from "../client/network-status.js";
 import type { AuthConfig } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
 import type { DooverStatsCollector } from "../client/stats.js";
 import { DooverApiError } from "./errors.js";
 
 export interface DooverClientConfig extends AuthConfig {
+  networkStatus?: NetworkStatusSource;
   dataRestUrl: string;
   controlApiUrl: string;
   dataWssUrl: string;

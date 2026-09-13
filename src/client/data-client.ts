@@ -1,3 +1,4 @@
+import type { NetworkStatusSource } from "./network-status.js";
 import type { AgentsApi } from "../apis/agents-api.js";
 import type { AggregatesApi } from "../apis/aggregates-api.js";
 import type { AlarmsApi } from "../apis/alarms-api.js";
@@ -75,6 +76,8 @@ export interface DataClientStatus {
  * later; the invariant is that `DooverClient` always satisfies it.
  */
 export interface DataClient {
+  /** Optional platform source; React hooks otherwise use browser network status. */
+  readonly networkStatus?: NetworkStatusSource;
   readonly agents: AgentsApiLike;
   readonly channels: ChannelsApiLike;
   readonly messages: MessagesApiLike;
