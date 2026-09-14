@@ -116,3 +116,5 @@ export {
   getSharedQueryClient,
   resetSharedQueryClient,
 } from "./sharedQueryClient.js";
+
+export { useServiceReachability } from "./useServiceReachability.js";

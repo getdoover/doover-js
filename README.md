@@ -416,3 +416,31 @@ its `setOnline(online)` method from platform network callbacks. Gateway failures
 must not update this source. The legacy `OfflineDataClient.isOnline` callback
 remains supported for request-time checks; a reactive source also updates the UI
 between requests.
+
+### Data service reachability
+
+`useServiceReachability()` returns `"unknown"`, `"reachable"`, or `"unreachable"`.
+It observes `client.reachability`, independently of `navigator.onLine` and the
+WebSocket's open state. `OfflineDataClient` forwards the wrapped client's source.
+Clients without this source return `"unknown"`; multiplex consumers can observe
+the relevant member client rather than assuming all services share connectivity.
+
+Checks run only while this hook or a direct `client.reachability.subscribe(...)`
+subscription is mounted. Multiple observers share one loop. Existing
+`onStatusChange` subscriptions do not start checks. The final unsubscribe cancels
+the timer and probe. Each probe has a five-second deadline. Healthy clients check
+every 30 seconds; unreachable clients retry every five seconds. Browser offline
+events suspend probes; online events trigger a fresh check.
+
+A REST transport failure also schedules a check, coalescing simultaneous failures
+and limiting probes to one per second. It does not retry or queue the failed
+request, including commands. HTTP error responses and response parsing failures
+do not trigger these checks.
+
+The probe sends a credential-free `HEAD` request to `dataRestUrl` with
+`cache: "no-store"`. Any HTTP response, including 401, 404, or 500, proves network
+reachability; this is not an application health check. DNS, CORS, transport errors,
+and timeouts report unreachable. A deployment must allow CORS on its probe URL.
+Set `reachability: { probeUrl: "https://data.example.com/health" }` to use a different
+read-only endpoint, or `reachability: false` to disable the source. The configured
+`fetchImpl` also handles probes, including in native applications.

@@ -1,3 +1,4 @@
+import type { ServiceReachabilitySource } from "./service-reachability.js";
 import type { NetworkStatusSource } from "./network-status.js";
 import type { AgentsApi } from "../apis/agents-api.js";
 import type { AggregatesApi } from "../apis/aggregates-api.js";
@@ -78,6 +79,8 @@ export interface DataClientStatus {
 export interface DataClient {
   /** Optional platform source; React hooks otherwise use browser network status. */
   readonly networkStatus?: NetworkStatusSource;
+  /** Optional data API reachability. Polls only while explicitly subscribed. */
+  readonly reachability?: ServiceReachabilitySource;
   readonly agents: AgentsApiLike;
   readonly channels: ChannelsApiLike;
   readonly messages: MessagesApiLike;

@@ -5,3 +5,5 @@ export type * from "./data-client.js";
 
 export { browserNetworkStatus, createNetworkStatusStore } from "./network-status.js";
 export type { NetworkStatusSource, NetworkStatusSnapshot } from "./network-status.js";
+
+export type { ServiceReachability, ServiceReachabilitySource, ReachabilityOptions } from "./service-reachability.js";
