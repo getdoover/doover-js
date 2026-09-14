@@ -1,3 +1,4 @@
+import { ServiceReachabilityMonitor, type ServiceReachabilitySource } from "./service-reachability.js";
 import { browserNetworkStatus, type NetworkStatusSource } from "./network-status.js";
 import { AgentsApi } from "../apis/agents-api.js";
 import { AggregatesApi } from "../apis/aggregates-api.js";
@@ -44,6 +45,7 @@ const ALL_CAPS_SET: ReadonlySet<Capability> = new Set(ALL_CAPABILITIES);
 
 export class DooverClient implements DataClient {
   readonly networkStatus: NetworkStatusSource;
+  readonly reachability: ServiceReachabilitySource | undefined;
   readonly auth: DooverAuth;
   readonly rest: RestClient;
   readonly viewer: DooverDataProvider;
@@ -99,7 +101,13 @@ export class DooverClient implements DataClient {
     };
     const stamper = new ProvenanceStamper(this.identity);
 
-    this.rest = new RestClient(config, this.auth);
+    const reachability = config.reachability === false ? undefined : new ServiceReachabilityMonitor(
+      config.reachability?.probeUrl ?? config.dataRestUrl,
+      this.networkStatus,
+      config.fetchImpl ?? ((...args) => fetch(...args)),
+    );
+    this.reachability = reachability;
+    this.rest = new RestClient(config, this.auth, () => reachability?.requestFailed());
     this.gatewayImpl = new GatewayClient(config, this.auth);
     this.gatewayImpl.setProvenanceHook((value, ctx) => stamper.stampGatewayEvent(value, ctx));
     this.gateway = this.gatewayImpl;

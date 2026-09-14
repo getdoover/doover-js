@@ -1,3 +1,4 @@
+import type { ReachabilityOptions } from "../client/service-reachability.js";
 import type { NetworkStatusSource } from "../client/network-status.js";
 import type { AuthConfig } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
@@ -6,6 +7,8 @@ import { DooverApiError } from "./errors.js";
 
 export interface DooverClientConfig extends AuthConfig {
   networkStatus?: NetworkStatusSource;
+  /** Data API reachability checks while reachability is observed. Set false to disable. */
+  reachability?: ReachabilityOptions | false;
   dataRestUrl: string;
   controlApiUrl: string;
   dataWssUrl: string;
@@ -63,7 +66,7 @@ export class RestClient {
   readonly auth: DooverAuth | null;
   private stats: DooverStatsCollector | null = null;
 
-  constructor(config: DooverClientConfig, auth?: DooverAuth) {
+  constructor(config: DooverClientConfig, auth?: DooverAuth, private readonly onTransportFailure?: () => void) {
     this.config = {
       ...config,
       sharing: config.sharing ?? "internal",
@@ -179,12 +182,18 @@ export class RestClient {
     }
 
     const fetchImpl = this.config.fetchImpl ?? fetch;
-    return fetchImpl(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      credentials: request.credentials,
-    });
+    try {
+      return await fetchImpl(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        credentials: request.credentials,
+      });
+    } catch (error) {
+      // Auth preparation, HTTP errors and JSON parsing are outside this boundary.
+      this.onTransportFailure?.();
+      throw error;
+    }
   }
 
   get<T>(path: string, query?: RequestOptions["query"], baseUrl?: string) {

@@ -1,6 +1,6 @@
 {
   "name": "doover-js",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "TypeScript client for Doover.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -641,7 +641,19 @@
       },
       "default": "./dist/react/useUpdateMessage.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./react/useServiceReachability": {
+      "module": "./dist/esm/react/useServiceReachability.js",
+      "import": {
+        "types": "./dist/esm/react/useServiceReachability.d.ts",
+        "default": "./dist/esm/react/useServiceReachability.js"
+      },
+      "require": {
+        "types": "./dist/react/useServiceReachability.d.ts",
+        "default": "./dist/react/useServiceReachability.js"
+      },
+      "default": "./dist/react/useServiceReachability.js"
+    }
   },
   "repository": {
     "type": "git",
@@ -866,6 +878,9 @@
       ],
       "react/useUpdateMessage": [
         "dist/react/useUpdateMessage.d.ts"
+      ],
+      "react/useServiceReachability": [
+        "dist/react/useServiceReachability.d.ts"
       ]
     }
   }

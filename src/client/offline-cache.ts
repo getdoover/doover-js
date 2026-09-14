@@ -1,3 +1,4 @@
+import type { ServiceReachabilitySource } from "./service-reachability.js";
 import { browserNetworkStatus, type NetworkStatusSource } from "./network-status.js";
 import type {
   AgentScope,
@@ -203,6 +204,7 @@ const INITIAL_OFFLINE_STATUS: OfflineStatusSnapshot = {
 
 export class OfflineDataClient implements DataClient {
   readonly networkStatus: NetworkStatusSource;
+  readonly reachability: ServiceReachabilitySource | undefined;
   private unsubscribeNetwork?: () => void;
   readonly agents: AgentsApiLike;
   readonly channels: ChannelsApiLike;
@@ -230,6 +232,7 @@ export class OfflineDataClient implements DataClient {
 
   constructor(options: OfflineDataClientOptions) {
     this.client = options.client;
+    this.reachability = options.client.reachability;
     this.networkStatus = options.networkStatus ?? options.client.networkStatus ?? browserNetworkStatus;
     this.storage = options.storage;
     this.scope = options.scope;

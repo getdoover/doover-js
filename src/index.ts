@@ -149,3 +149,5 @@ export {
 
 export { browserNetworkStatus, createNetworkStatusStore } from "./client/network-status.js";
 export type { NetworkStatusSource, NetworkStatusSnapshot } from "./client/network-status.js";
+
+export type { ServiceReachability, ServiceReachabilitySource, ReachabilityOptions } from "./client/service-reachability.js";
