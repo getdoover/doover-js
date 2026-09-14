@@ -437,8 +437,10 @@ and limiting probes to one per second. It does not retry or queue the failed
 request, including commands. HTTP error responses and response parsing failures
 do not trigger these checks.
 
-The probe sends a credential-free `HEAD` request to `dataRestUrl` with
-`cache: "no-store"`. Any HTTP response, including 401, 404, or 500, proves network
+The probe sends a credential-free `HEAD` request to `dataRestUrl` with a trailing slash and
+`cache: "no-store"`. For example, a base URL ending in `/api` is probed at `/api/`,
+inside the API routing prefix rather than a possible static CDN fallback. An
+explicit `probeUrl` is used unchanged. Any HTTP response, including 401, 404, or 500, proves network
 reachability; this is not an application health check. DNS, CORS, transport errors,
 and timeouts report unreachable. A deployment must allow CORS on its probe URL.
 Set `reachability: { probeUrl: "https://data.example.com/health" }` to use a different
