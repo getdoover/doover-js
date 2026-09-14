@@ -1,3 +1,4 @@
+import { browserNetworkStatus, type NetworkStatusSource } from "./network-status.js";
 import type {
   AgentScope,
   AgentsApiLike,
@@ -157,14 +158,16 @@ export class MemoryOfflineStorageAdapter implements OfflineStorageAdapter {
 }
 
 export interface OfflineDataClientOptions {
+  /** Reactive platform signal; defaults to the wrapped client's source. */
+  networkStatus?: NetworkStatusSource;
   client: DataClient;
   storage: OfflineStorageAdapter;
   scope: OfflineCacheScope;
   policies?: OfflineChannelPolicy[];
   defaultRetentionMs?: number;
   /**
-   * Apps may provide their own reachability signal. When omitted, the wrapper
-   * uses `navigator.onLine` when present and otherwise assumes online.
+   * Legacy pull-only override. Prefer networkStatus for reactive updates
+   * between requests. When omitted, the wrapper reads its network source.
    */
   isOnline?: () => boolean;
 }
@@ -199,6 +202,8 @@ const INITIAL_OFFLINE_STATUS: OfflineStatusSnapshot = {
 };
 
 export class OfflineDataClient implements DataClient {
+  readonly networkStatus: NetworkStatusSource;
+  private unsubscribeNetwork?: () => void;
   readonly agents: AgentsApiLike;
   readonly channels: ChannelsApiLike;
   readonly messages: MessagesApiLike;
@@ -225,6 +230,7 @@ export class OfflineDataClient implements DataClient {
 
   constructor(options: OfflineDataClientOptions) {
     this.client = options.client;
+    this.networkStatus = options.networkStatus ?? options.client.networkStatus ?? browserNetworkStatus;
     this.storage = options.storage;
     this.scope = options.scope;
     this.defaultRetentionMs = options.defaultRetentionMs ?? DEFAULT_OFFLINE_RETENTION_MS;
@@ -263,19 +269,30 @@ export class OfflineDataClient implements DataClient {
   }
 
   getOfflineStatus(): OfflineStatusSnapshot {
-    return {
-      ...this.offlineStatus,
-      online: this.isOnline(),
-    };
+    const online = this.isOnline();
+    if (online !== this.offlineStatus.online) {
+      this.offlineStatus = { ...this.offlineStatus, online, at: Date.now() };
+    }
+    return this.offlineStatus;
   }
 
   onOfflineStatusChange(listener: (status: OfflineStatusSnapshot) => void): () => void {
     this.offlineStatusListeners.add(listener);
+    if (!this.unsubscribeNetwork) {
+      this.unsubscribeNetwork = this.networkStatus.subscribe(() => {
+        const status = this.getOfflineStatus();
+        this.offlineStatusListeners.forEach((callback) => callback(status));
+      });
+    }
     let active = true;
     return () => {
       if (!active) return;
       active = false;
       this.offlineStatusListeners.delete(listener);
+      if (!this.offlineStatusListeners.size) {
+        this.unsubscribeNetwork?.();
+        this.unsubscribeNetwork = undefined;
+      }
     };
   }
 
@@ -967,8 +984,7 @@ export class OfflineDataClient implements DataClient {
 
   private isOnline(): boolean {
     if (this.isOnlineFn) return this.isOnlineFn();
-    const nav = globalThis.navigator as { onLine?: boolean } | undefined;
-    return nav?.onLine ?? true;
+    return this.networkStatus.getSnapshot().online;
   }
 
   private setOfflineStatus(status: Omit<OfflineStatusSnapshot, "online" | "at">): void {

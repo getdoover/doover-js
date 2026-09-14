@@ -1,3 +1,4 @@
+import { browserNetworkStatus, type NetworkStatusSource } from "./network-status.js";
 import { AgentsApi } from "../apis/agents-api.js";
 import { AggregatesApi } from "../apis/aggregates-api.js";
 import { AlarmsApi } from "../apis/alarms-api.js";
@@ -42,6 +43,7 @@ import { DooverStatsCollector, type DooverStatsSnapshot } from "./stats.js";
 const ALL_CAPS_SET: ReadonlySet<Capability> = new Set(ALL_CAPABILITIES);
 
 export class DooverClient implements DataClient {
+  readonly networkStatus: NetworkStatusSource;
   readonly auth: DooverAuth;
   readonly rest: RestClient;
   readonly viewer: DooverDataProvider;
@@ -71,6 +73,7 @@ export class DooverClient implements DataClient {
   private readonly rpcImpl: RpcDispatcher;
 
   constructor(config: DooverClientConfig) {
+    this.networkStatus = config.networkStatus ?? browserNetworkStatus;
     this.auth = buildAuth({
       auth: config.auth,
       profile: config.profile,

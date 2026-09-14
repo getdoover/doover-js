@@ -146,3 +146,6 @@ export {
   extractSnowflakeId,
   generateSnowflakeIdAtTime,
 } from "./utils/snowflake.js";
+
+export { browserNetworkStatus, createNetworkStatusStore } from "./client/network-status.js";
+export type { NetworkStatusSource, NetworkStatusSnapshot } from "./client/network-status.js";

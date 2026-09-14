@@ -1,3 +1,4 @@
+import { createNetworkStatusStore } from "../client/network-status.js";
 import { expect } from "chai";
 import { describe, it } from "mocha";
 
@@ -38,7 +39,7 @@ describe("requestOptions", () => {
 
 describe("OfflineDataClient", () => {
   it("caches reads covered by a stored channel policy and serves them offline", async () => {
-    let online = true;
+    const networkStatus = createNetworkStatusStore(true);
     const messageId = generateSnowflakeIdAtTime(new Date("2026-06-10T00:00:00Z"));
     const fetchMock = createFetchMock((url) => {
       if (url.includes("/agents/a1/channels/tag_values/messages")) {
@@ -59,7 +60,7 @@ describe("OfflineDataClient", () => {
       client: makeOnlineClient(fetchMock as typeof fetch),
       storage,
       scope: { userId: "u1", organisationId: "org1", sourceId: "cloud" },
-      isOnline: () => online,
+      networkStatus,
     });
     client.setChannelPolicy({
       id: "tag-values-history",
@@ -73,13 +74,24 @@ describe("OfflineDataClient", () => {
     );
     expect(onlineMessages.map((message) => message.data)).to.deep.equal([{ value: 42 }]);
 
-    online = false;
+    networkStatus.setOnline(false);
     const offlineMessages = await client.messages.listMessages(
       { agentId: "a1", channelName: "tag_values" },
       { limit: 100, order: "asc" },
     );
     expect(offlineMessages).to.deep.equal(onlineMessages);
     expect(fetchMock.callCount).to.equal(1);
+    expect(client.getOfflineStatus().isOfflineFallback).to.equal(true);
+    expect(client.getOfflineStatus().cachedAt).to.be.a("number");
+    networkStatus.setOnline(true);
+    // The gateway is disconnected throughout. HTTP reads must still resume.
+    expect(client.isConnected()).to.equal(false);
+    await client.messages.listMessages(
+      { agentId: "a1", channelName: "tag_values" },
+      { limit: 100, order: "asc" },
+    );
+    expect(fetchMock.callCount).to.equal(2);
+    expect(client.getOfflineStatus().isOfflineFallback).to.equal(false);
   });
 
   it("supports per-call cache opt-in for discovery reads", async () => {

@@ -31,6 +31,8 @@ try {
   run("tar", ["-xzf", join(temp, pack.filename), "-C", packageDir, "--strip-components=1"]);
   const pkg = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
   assert.equal(pkg.sideEffects, false, "Unused modules must be removable");
+  const esmMetadata = JSON.parse(await readFile(join(packageDir, "dist/esm/package.json"), "utf8"));
+  assert.equal(esmMetadata.version, pkg.version, "Federated consumers must see the package version");
   const specifiers = Object.keys(pkg.exports).filter((path) => path !== "./package.json")
     .map((path) => path === "." ? pkg.name : pkg.name + path.slice(1));
   for (const [path, conditions] of Object.entries(pkg.exports)) {

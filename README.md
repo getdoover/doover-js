@@ -389,3 +389,30 @@ const statuses = useClientStatus();
 `*Api` resource methods accept either positional arguments or a `ChannelIdentifier` / `{ agentId }` object on every call form.
 
 `client.rpc.send` adds optional `signal: AbortSignal` and `timeoutMs: number` and rejects with `DooverRpcError` (with `.status` and `.request`) instead of the bare status string.
+
+## Network availability and offline cache status
+
+`useOfflineStatus()` reports browser network changes for every client, including
+`DooverClient` without an offline cache. It updates on initial offline load and
+online/offline events even when no requests run. `online` describes the platform's
+network signal; it does not prove that the Doover server is reachable.
+`useClientStatus()` separately reports the gateway connection.
+
+`OfflineDataClient` adds cache metadata such as `isOfflineFallback` and `cachedAt`.
+These fields describe the last cache operation, not every item on the page. Its
+snapshots retain object identity between changes for React external-store hooks.
+Network transitions preserve cache metadata until another operation updates it.
+
+Both clients accept `networkStatus`, a `NetworkStatusSource` with `getSnapshot()`
+and `subscribe(listener)`. The offline wrapper inherits its underlying client's
+source unless overridden. Sources return a stable `{ online, at }` snapshot and
+notify subscribers when it changes. The exported `browserNetworkStatus` is the
+default; it attaches browser listeners while subscribed and releases them after
+the last unsubscribe. Outside a browser it assumes online when no platform
+signal exists.
+
+Native applications can pass `createNetworkStatusStore(initialOnline)` and call
+its `setOnline(online)` method from platform network callbacks. Gateway failures
+must not update this source. The legacy `OfflineDataClient.isOnline` callback
+remains supported for request-time checks; a reactive source also updates the UI
+between requests.
