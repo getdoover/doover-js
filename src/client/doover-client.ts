@@ -102,7 +102,9 @@ export class DooverClient implements DataClient {
     const stamper = new ProvenanceStamper(this.identity);
 
     const reachability = config.reachability === false ? undefined : new ServiceReachabilityMonitor(
-      config.reachability?.probeUrl ?? config.dataRestUrl,
+      // Probe inside the API prefix: the bare prefix may route to a static CDN
+      // fallback without CORS, even though every real API request succeeds.
+      config.reachability?.probeUrl ?? `${config.dataRestUrl.replace(/\/+$/, "")}/`,
       this.networkStatus,
       config.fetchImpl ?? ((...args) => fetch(...args)),
     );

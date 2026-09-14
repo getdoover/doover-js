@@ -9,7 +9,7 @@ export interface ServiceReachabilitySource {
 }
 
 export interface ReachabilityOptions {
-  /** A CORS-enabled, read-only URL on the data service. Defaults to dataRestUrl.
+  /** A CORS-enabled, read-only URL on the data service. Defaults to dataRestUrl with a trailing slash.
    * Any HTTP response proves reachability, including authentication/server errors.
    * HEAD requests omit credentials and bypass the browser cache. */
   probeUrl?: string;

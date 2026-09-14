@@ -34,6 +34,29 @@ function observe(client: DooverClient, listener = () => {}): () => void {
 describe("service reachability through DooverClient", () => {
   afterEach(() => sinon.restore());
 
+  it("probes inside the API path rather than the CDN fallback at the bare prefix", async () => {
+    const clock = sinon.useFakeTimers();
+    for (const baseUrl of ["https://data.example.test/api", "https://data.example.test/api/"]) {
+      const urls: string[] = [];
+      const client = new DooverClient({
+        dataRestUrl: baseUrl, controlApiUrl: baseUrl,
+        dataWssUrl: "wss://data.example.test", disableBrowserLifecycleHooks: true,
+        fetchImpl: async (url) => {
+          urls.push(String(url));
+          // The bare prefix is a static CDN fallback without API CORS headers.
+          if (String(url) === "https://data.example.test/api") throw new TypeError("Failed to fetch");
+          return new Response(null, { status: 404 });
+        },
+      });
+      const stop = observe(client);
+      try {
+        await clock.tickAsync(0);
+        expect(urls).to.deep.equal(["https://data.example.test/api/"]);
+        expect(client.reachability?.getSnapshot()).to.equal("reachable");
+      } finally { stop(); }
+    }
+  });
+
   it("detects an idle outage with the browser still online and recovers without replaying commands", async () => {
     const clock = sinon.useFakeTimers();
     const { client, network, setAvailable, counts } = setup();
