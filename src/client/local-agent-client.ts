@@ -195,7 +195,7 @@ export class LocalAgentClient implements DataClient {
   }
 
   // --- status ---
-  isConnected(): boolean { return this.gateway.isConnected(); }
+  isConnected(): boolean { return this.statusTracker.getStatus().connected; }
   getStatus(): DataClientStatus { return this.statusTracker.getStatus(); }
   onStatusChange(listener: (status: DataClientStatus) => void): () => void {
     return this.statusTracker.onChange(listener);
