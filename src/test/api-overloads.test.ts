@@ -140,13 +140,39 @@ describe("MessagesApi overloads + defaults", () => {
     expect(wireParams.limit).to.equal(5);
   });
 
-  it("getTimeseries forwards paginate to the server", async () => {
+  it("getTimeseries no longer sends the deprecated paginate", async () => {
     const rest = makeRestStub();
     const api = new MessagesApi(rest);
     await api.getTimeseries("a1", "c1", { limit: 1500, paginate: true });
     const wireParams = rest.calls[0]!.args[1] as Record<string, unknown>;
-    expect(wireParams.paginate).to.equal(true);
+    expect(wireParams).to.not.have.property("paginate");
     expect(wireParams.limit).to.equal(1500);
+  });
+
+  it("getTimeseries reverses each page for order='asc'", async () => {
+    const rest = makeRestStub();
+    rest.get = ((..._args: unknown[]) =>
+      Promise.resolve({
+        count: 2,
+        results: [
+          { value: {}, message_id: "3" },
+          { value: {}, message_id: "2" },
+        ],
+        next: "2",
+      })) as unknown as RestClient["get"];
+    const api = new MessagesApi(rest);
+    const series = await api.getTimeseries("a1", "c1", { limit: 2, order: "asc" });
+    expect(series.results.map((r) => r.message_id)).to.deep.equal(["2", "3"]);
+    expect(series.next).to.equal("2");
+  });
+
+  it("getTimeseries returns an older server's numeric next as a string", async () => {
+    const rest = makeRestStub();
+    rest.get = ((..._args: unknown[]) =>
+      Promise.resolve({ count: 0, results: [], next: 1234 })) as unknown as RestClient["get"];
+    const api = new MessagesApi(rest);
+    const series = await api.getTimeseries("a1", "c1", { limit: 2 });
+    expect(series.next).to.equal("1234");
   });
 });
 

@@ -9,6 +9,17 @@ import {
 import type { MessageStructure } from "../types/common.js";
 import { useDooverClient } from "./context.js";
 
+/**
+ * Widest `before - after` span one multi-agent request may cover. The server
+ * caps it at 7 days (it walks each agent's history a day at a time); the
+ * minute's margin keeps each request clear of the cap. Longer ranges are
+ * read as a series of these, newest first.
+ */
+export const MULTI_AGENT_MAX_WINDOW_MS = 7 * 24 * 60 * 60 * 1000 - 60_000;
+
+/** The window above as a snowflake-id delta (ids carry ms in bits 22+). */
+const MAX_WINDOW_ID_SPAN = BigInt(MULTI_AGENT_MAX_WINDOW_MS) << 22n;
+
 export function multiAgentChannelMessagesQueryKey(
   channelName: string,
   agentIds: string[],
@@ -60,7 +71,12 @@ export interface UseMultiAgentChannelMessagesOptions {
    * of these top-level field names. Forwarded as `field_name`.
    */
   fields?: string[];
-  /** Optional first-page `before` cursor (snowflake id). */
+  /**
+   * Optional first-page `before` cursor (snowflake id). With `after`, it
+   * bounds a time range, which may be wider than the server's 7-day cap:
+   * the range is then read a window at a time, each further window arriving
+   * as more pages (see `after`).
+   */
   initialBefore?: string;
   /**
    * Keep paging older automatically until `hasNextPage` is false. Each page
@@ -83,6 +99,14 @@ export interface UseMultiAgentChannelMessagesOptions {
    * mirrors `useChannelMessages`'s `after`. Use this to fetch a bounded
    * time window (e.g. last 24h) across many agents without filtering
    * on the client.
+   *
+   * With `initialBefore` more than `MULTI_AGENT_MAX_WINDOW_MS` before it, the
+   * range is split into windows the server accepts, read newest first:
+   * `fetchNextPage` finishes one window's per-agent cursors, then moves on
+   * to the next window, and `hasNextPage` stays true until the whole range
+   * is read. A quiet window can come back empty, so fetch on until you have
+   * what you need (or set `autoPaginate`, raising `maxPages` for a long
+   * range: a year is 53 windows).
    */
   after?: string;
   /**
@@ -117,6 +141,38 @@ interface PageParam {
   before?: string;
   agentIds?: string[];
   agentBefore?: string[];
+  /** For a range wider than one request: the window this page reads. */
+  windowBefore?: string;
+  windowAfter?: string;
+}
+
+/** The window ending at `before`, reaching back no further than `after`. */
+function windowEndingAt(before: string, after: string) {
+  const start = BigInt(before) - MAX_WINDOW_ID_SPAN;
+  const floor = BigInt(after);
+  return {
+    windowBefore: before,
+    windowAfter: (start > floor ? start : floor).toString(),
+  };
+}
+
+/**
+ * Within a windowed range: carry on inside the current window, or once it's
+ * drained, step back to the window before it until the range's `after`.
+ */
+function nextWindowedPageParam<TData>(
+  lastPage: Page<TData> | undefined,
+  lastParam: PageParam,
+  after: string,
+): PageParam | undefined {
+  const { windowBefore, windowAfter } = lastParam;
+  if (windowBefore === undefined || windowAfter === undefined) {
+    return nextPageParam(lastPage);
+  }
+  const within = nextPageParam(lastPage);
+  if (within) return { ...within, windowBefore, windowAfter };
+  if (BigInt(windowAfter) <= BigInt(after)) return undefined;
+  return windowEndingAt(windowAfter, after);
 }
 
 function nextPageParam<TData>(lastPage: Page<TData> | undefined): PageParam | undefined {
@@ -211,23 +267,39 @@ export function useMultiAgentChannelMessages<TData = unknown>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, channelName, liveUpdates, agentIds.join(",")]);
 
+  // A range wider than the server accepts in one request is read a window
+  // at a time; narrower ones (and open-ended reads) are one window as ever.
+  const windowed =
+    after !== undefined &&
+    initialBefore !== undefined &&
+    BigInt(initialBefore) - BigInt(after) > MAX_WINDOW_ID_SPAN;
+
   const query = useInfiniteQuery<Page<TData>, Error, InfiniteData<Page<TData>>, typeof key, PageParam>({
     queryKey: key,
     enabled: agentIds.length > 0,
     staleTime: Infinity,
-    initialPageParam: (initialBefore ? { before: initialBefore } : {}) as PageParam,
-    getNextPageParam: nextPageParam,
+    initialPageParam: (windowed
+      ? windowEndingAt(initialBefore, after)
+      : initialBefore
+        ? { before: initialBefore }
+        : {}) as PageParam,
+    getNextPageParam: (lastPage, _allPages, lastParam) =>
+      windowed
+        ? nextWindowedPageParam(lastPage, lastParam, after)
+        : nextPageParam(lastPage),
     queryFn: async ({ pageParam }) => {
+      const before = pageParam.before ?? pageParam.windowBefore;
+      const lowerBound = pageParam.windowAfter ?? after;
       const params = {
         agent_id: pageParam.agentIds ?? agentIds,
-        ...(pageParam.before ? { before: pageParam.before } : {}),
+        ...(before ? { before } : {}),
         ...(pageParam.agentBefore ? { agent_before: pageParam.agentBefore } : {}),
         ...(limit !== undefined ? { limit } : {}),
         ...(agentMessageLimit !== undefined
           ? { agent_message_limit: agentMessageLimit }
           : {}),
         ...(fields && fields.length > 0 ? { field_name: fields } : {}),
-        ...(after !== undefined ? { after } : {}),
+        ...(lowerBound !== undefined ? { after: lowerBound } : {}),
       };
       // Pass `{ sources }` as a trailing bag only when set — cast through
       // `never` since the TypeScript overloads don't declare it.

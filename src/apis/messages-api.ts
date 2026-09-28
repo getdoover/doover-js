@@ -35,10 +35,33 @@ export interface ListMessagesParams {
    * index 0.
    */
   order?: "asc" | "desc";
+}
+
+/**
+ * `getTimeseries` options. The endpoint always returns `{ results, count,
+ * next }`: while `next` is set there's more, and passing it back as `before`
+ * continues newest → oldest.
+ */
+export interface TimeseriesParams {
+  /** Exclusive upper bound, and the paging cursor (a response's `next`). */
+  before?: string;
   /**
-   * Opt into paginated timeseries responses (`getTimeseries` only). When true
-   * the server returns a `next` cursor alongside `{ results, count }`; pass it
-   * back as `before` to page through results.
+   * Lower bound. A missing bound is filled a week from the other, so unlike
+   * `listMessages`, `after` on its own doesn't page forward: it reads the
+   * newest `limit` points in the week after it.
+   */
+  after?: string;
+  /** Points per page; the server sends 50 without it and allows 1500. */
+  limit?: number;
+  field_name?: string[];
+  /**
+   * `"desc"` (default) keeps the server's newest-first order; `"asc"`
+   * reverses each page client-side so the oldest point is at index 0.
+   */
+  order?: "asc" | "desc";
+  /**
+   * @deprecated No effect, and no longer sent: the endpoint has no such
+   * parameter and always returns `next`.
    */
   paginate?: boolean;
 }
@@ -161,22 +184,37 @@ export class MessagesApi {
   getTimeseries(
     agentId: string,
     channelName: string,
-    params: ListMessagesParams,
+    params: TimeseriesParams,
   ): Promise<DataSeries>;
   getTimeseries(
     identifier: { agentId: string; channelName: string },
-    params: ListMessagesParams,
+    params: TimeseriesParams,
   ): Promise<DataSeries>;
   getTimeseries(...args: unknown[]): Promise<DataSeries> {
-    const { agentId, channelName, options } = resolveChannelArgs<ListMessagesParams>(args);
-    return this._getTimeseries(agentId, channelName, options as ListMessagesParams);
+    const { agentId, channelName, options } = resolveChannelArgs<TimeseriesParams>(args);
+    return this._getTimeseries(agentId, channelName, options as TimeseriesParams);
   }
-  private _getTimeseries(agentId: string, channelName: string, params: ListMessagesParams) {
-    const { order: _order, ...rest } = params;
-    return this.rest.get<DataSeries>(
+  private async _getTimeseries(
+    agentId: string,
+    channelName: string,
+    params: TimeseriesParams,
+  ): Promise<DataSeries> {
+    const { order, paginate: _paginate, ...query } = params;
+    const series = await this.rest.get<DataSeries>(
       `/agents/${agentId}/channels/${channelName}/messages/timeseries`,
-      rest,
+      query,
     );
+    // Older servers sent `next` as a JSON number; keep the declared string
+    // type (the digits past 2^53 were already rounded in parsing).
+    const next = series.next;
+    return {
+      ...series,
+      ...(typeof next === "number" ? { next: String(next) } : {}),
+      results:
+        order === "asc" && series.results
+          ? [...series.results].reverse()
+          : series.results,
+    };
   }
 
   getMessage(

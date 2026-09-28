@@ -85,6 +85,7 @@ export type {
 export {
   useMultiAgentChannelMessages,
   multiAgentChannelMessagesQueryKey,
+  MULTI_AGENT_MAX_WINDOW_MS,
 } from "./useMultiAgentChannelMessages.js";
 export type {
   UseMultiAgentChannelMessagesOptions,
