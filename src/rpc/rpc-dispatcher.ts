@@ -57,6 +57,8 @@ interface PendingRpc<TPending = unknown> {
 interface ChannelRefEntry {
   unsubscribe: () => void;
   refCount: number;
+  posting: number;
+  earlyReplies: Map<string, MessageStructure>;
 }
 
 function isRpcMessageData(data: unknown): data is RpcMessageData<unknown, unknown, unknown> {
@@ -96,6 +98,12 @@ export class RpcDispatcher {
       const channelKey = `${channelRef.agent_id}/${channelRef.name}`;
 
       this.acquireChannel(channelKey, channelRef);
+      const entry = this.channelRefs.get(channelKey)!;
+      entry.posting += 1;
+      const finishPosting = () => {
+        entry.posting -= 1;
+        if (entry.posting === 0) entry.earlyReplies.clear();
+      };
 
       const startedAt = this.stats?.recordRpcStart() ?? null;
 
@@ -138,13 +146,24 @@ export class RpcDispatcher {
           }
 
           this.pending.set(message.id, pending as PendingRpc);
+          // A device can answer before the POST response gives us its ID.
+          // Replay the live reply before inspecting the (possibly older) POST
+          // snapshot, so an older pending status cannot replace final success.
+          const early = entry.earlyReplies.get(message.id);
+          entry.earlyReplies.delete(message.id);
+          if (early) this.route(early);
+          if (this.pending.has(message.id) && isRpcMessageData(message.data) &&
+              (message.data.status.code === "success" || message.data.status.code === "error")) {
+            this.route(message);
+          }
         })
         .catch((err) => {
           // postMessage failed before we registered pending — release and reject.
           this.releaseChannel(channelKey);
           this.stats?.recordRpcEnd(startedAt, "error");
           reject(err);
-        });
+        })
+        .finally(finishPosting);
     });
   }
 
@@ -158,7 +177,7 @@ export class RpcDispatcher {
       onMessageUpdate: (msg, requestData) => this.route(msg, requestData),
     };
     const unsubscribe = this.gateway.subscribeToChannel(channelRef, handlers);
-    this.channelRefs.set(channelKey, { unsubscribe, refCount: 1 });
+    this.channelRefs.set(channelKey, { unsubscribe, refCount: 1, posting: 0, earlyReplies: new Map() });
   }
 
   private releaseChannel(channelKey: string): void {
@@ -172,9 +191,22 @@ export class RpcDispatcher {
   }
 
   private route(msg: MessageStructure, _requestData?: JSONValue): void {
-    const pending = this.pending.get(msg.id);
-    if (!pending) return;
     if (!isRpcMessageData(msg.data)) return;
+    const pending = this.pending.get(msg.id);
+    if (!pending) {
+      const entry = this.channelRefs.get(`${msg.channel.agent_id}/${msg.channel.name}`);
+      if (!entry?.posting) return;
+      const previous = entry.earlyReplies.get(msg.id);
+      if (previous && isRpcMessageData(previous.data) &&
+          (previous.data.status.code === "success" || previous.data.status.code === "error")) return;
+      // Only retain replies during POST registration, bounded even on busy
+      // shared channels. Entries are cleared when all outstanding POSTs finish.
+      if (!entry.earlyReplies.has(msg.id) && entry.earlyReplies.size >= 256) {
+        entry.earlyReplies.delete(entry.earlyReplies.keys().next().value!);
+      }
+      entry.earlyReplies.set(msg.id, msg);
+      return;
+    }
     const status = msg.data.status as RpcStatus<unknown>;
     pending.onStatus?.(status as never);
     if (status.code === "success") {
