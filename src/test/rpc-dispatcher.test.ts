@@ -368,3 +368,78 @@ describe("RpcDispatcher pending timeout", () => {
     expect(caught?.message).to.equal("RPC timed out");
   });
 });
+
+describe("RpcDispatcher early replies", () => {
+  for (const code of ["success", "error"] as const) {
+    it(`handles ${code} arriving before the POST resolves`, async () => {
+      const gw = makeFakeGateway();
+      const channel = { agent_id: "a1", name: "c1" };
+      const receipt = rpcMessage("early", channel, { code, message: "refused" }, {}, { saved: true });
+      const messages = { postMessage: async () => {
+        gw.emitMessageUpdate(receipt);
+        return { ...receipt, data: { method: "do", request: {} } };
+      } };
+      const dispatcher = new RpcDispatcher(gw as unknown as GatewayClient, messages as unknown as MessagesApi);
+      const outcome = await dispatcher.send({ agentId: "a1", channelName: "c1" }, { method: "do", request: {} }, { timeoutMs: 20 })
+        .then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+      if (code === "success") expect(outcome.value).to.deep.equal({ saved: true });
+      else expect(outcome.error).to.be.instanceOf(DooverRpcError);
+      expect(gw.unsubscribeCalls).to.equal(1);
+    });
+  }
+
+  it("handles a terminal status already present in the POST response", async () => {
+    const gw = makeFakeGateway();
+    const receipt = rpcMessage("early", { agent_id: "a1", name: "c1" }, { code: "success" }, {}, { saved: true });
+    const dispatcher = new RpcDispatcher(gw as unknown as GatewayClient, { postMessage: async () => receipt } as unknown as MessagesApi);
+    const outcome = await dispatcher.send({ agentId: "a1", channelName: "c1" }, { method: "do", request: {} }, { timeoutMs: 20 })
+      .catch(error => ({ error: error.message }));
+    expect(outcome).to.deep.equal({ saved: true });
+  });
+});
+
+describe("RpcDispatcher early reply isolation", () => {
+  it("matches concurrent early replies to the right POST, including out-of-order POST completion", async () => {
+    const gw = makeFakeGateway();
+    const channel = { agent_id: "a1", name: "c1" };
+    const posted: Array<(message: MessageStructure) => void> = [];
+    const messages = { postMessage: () => new Promise<MessageStructure>(resolve => posted.push(resolve)) };
+    const dispatcher = new RpcDispatcher(gw as unknown as GatewayClient, messages as unknown as MessagesApi);
+    const send = () => dispatcher.send({ agentId: "a1", channelName: "c1" }, { method: "do", request: {} }, { timeoutMs: 30 });
+    const a = send(), b = send();
+    const receiptA = rpcMessage("a", channel, { code: "success" }, {}, { command: "a" });
+    const receiptB = rpcMessage("b", channel, { code: "success" }, {}, { command: "b" });
+    gw.emitMessageUpdate(receiptA);
+    gw.emitMessageUpdate(receiptB);
+    posted[1]({ ...receiptB, data: {} });
+    expect(await b).to.deep.equal({ command: "b" });
+    expect(gw.unsubscribeCalls).to.equal(0);
+    posted[0]({ ...receiptA, data: {} });
+    expect(await a).to.deep.equal({ command: "a" });
+    expect(gw.unsubscribeCalls).to.equal(1);
+  });
+
+  it("does not replace early terminal success with a delayed progress update", async () => {
+    const gw = makeFakeGateway();
+    const channel = { agent_id: "a1", name: "c1" };
+    const messages = { postMessage: async () => {
+      gw.emitMessageUpdate(rpcMessage("a", channel, { code: "success" }, {}, { saved: true }));
+      gw.emitMessageUpdate(rpcMessage("a", channel, { code: "pending", message: undefined }, {}));
+      return { id: "a", data: {} };
+    } };
+    const dispatcher = new RpcDispatcher(gw as unknown as GatewayClient, messages as unknown as MessagesApi);
+    expect(await dispatcher.send({ agentId: "a1", channelName: "c1" }, { method: "do", request: {} }, { timeoutMs: 30 })).to.deep.equal({ saved: true });
+  });
+
+  it("a failed POST still rejects and releases the subscription despite early replies", async () => {
+    const gw = makeFakeGateway();
+    const messages = { postMessage: async () => {
+      gw.emitMessageUpdate(rpcMessage("other", { agent_id: "a1", name: "c1" }, { code: "success" }, {}));
+      throw new Error("POST failed");
+    } };
+    const dispatcher = new RpcDispatcher(gw as unknown as GatewayClient, messages as unknown as MessagesApi);
+    const error = await dispatcher.send({ agentId: "a1", channelName: "c1" }, { method: "do", request: {} }).catch(e => e);
+    expect(error.message).to.equal("POST failed");
+    expect(gw.unsubscribeCalls).to.equal(1);
+  });
+});
