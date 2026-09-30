@@ -37,10 +37,12 @@ describe("ClientStatusTracker", () => {
     expect(tracker.getStatus().state).to.equal("disconnected");
     expect(tracker.getStatus().agentScope).to.equal("all");
 
+    setConnected(true);
     emit("open");
     expect(tracker.getStatus().lastEvent).to.equal("open");
+    expect(tracker.getStatus().connected).to.equal(false);
+    expect(tracker.getStatus().state).to.equal("connecting");
 
-    setConnected(true);
     setSession({ session_id: "s1" });
     emit("ready", { session_id: "s1" });
     const ready = tracker.getStatus();
@@ -80,17 +82,38 @@ describe("ClientStatusTracker", () => {
     expect(tracker.getStatus().state).to.equal("error");
     expect(tracker.getStatus().lastError).to.equal("connection lost");
 
-    // Reconnect: open clears error, transitions to connecting
+    // Reconnect: a transport-level open clears the error but remains
+    // connecting until the gateway accepts the resumed session.
+    setConnected(true);
     emit("open");
+    expect(tracker.getStatus().connected).to.equal(false);
     expect(tracker.getStatus().state).to.equal("connecting");
     expect(tracker.getStatus().lastError).to.be.undefined;
 
     // Session established: transitions to connected with new session
-    setConnected(true);
     setSession({ session_id: "s2" });
     emit("ready", { session_id: "s2" });
     const status = tracker.getStatus();
     expect(status.state).to.equal("connected");
     expect(status.session).to.deep.equal({ id: "s2" });
+  });
+
+  it("reports reconnecting when the server cancels an open session", () => {
+    const { gw, emit, setConnected, setSession } = makeGatewayStub();
+    const tracker = new ClientStatusTracker("cloud", gw, () => "all");
+
+    setConnected(true);
+    emit("open");
+    setSession({ session_id: "s1" });
+    emit("ready", { session_id: "s1" });
+    expect(tracker.getStatus().connected).to.equal(true);
+
+    setSession(null);
+    emit("sessionCancelled");
+    const cancelled = tracker.getStatus();
+    expect(cancelled.connected).to.equal(false);
+    expect(cancelled.state).to.equal("connecting");
+    expect(cancelled.session).to.equal(null);
+    expect(cancelled.lastEvent).to.equal("sessionCancelled");
   });
 });

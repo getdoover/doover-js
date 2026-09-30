@@ -92,6 +92,9 @@ describe("LocalAgentClient", () => {
     await c.gateway.connect();
     const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
     ws.open();
+    expect(c.gateway.isConnected()).to.equal(true);
+    expect(c.isConnected()).to.equal(false);
+    expect(c.getStatus().state).to.equal("connecting");
     ws.receive({ op: 0, t: "Hello", d: {} });
     ws.receive({ op: 0, t: "Ready", d: { session_id: "s1", session_token: "t", subscriptions: [] } });
     expect(c.isConnected()).to.equal(true);
