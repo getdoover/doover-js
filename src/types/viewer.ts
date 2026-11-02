@@ -27,6 +27,8 @@ export interface Agent {
   };
   extra_config: Record<string, unknown>;
   connection_determination?: "Online" | "Offline";
+  /** Server-evaluated warning indicator from `/agents`; `null` when unknown. */
+  has_warning?: boolean | null;
   __source?: SourceProvenance;
 }
 
