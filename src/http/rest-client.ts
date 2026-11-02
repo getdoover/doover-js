@@ -3,7 +3,7 @@ import type { NetworkStatusSource } from "../client/network-status.js";
 import type { AuthConfig } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
 import type { DooverStatsCollector } from "../client/stats.js";
-import { DooverApiError } from "./errors.js";
+import { DooverApiError, DooverMfaRequiredError, isMfaRequiredBody } from "./errors.js";
 
 export interface DooverClientConfig extends AuthConfig {
   networkStatus?: NetworkStatusSource;
@@ -65,6 +65,7 @@ export class RestClient {
 
   readonly auth: DooverAuth | null;
   private stats: DooverStatsCollector | null = null;
+  private readonly mfaRequiredListeners = new Set<(error: DooverMfaRequiredError) => void>();
 
   constructor(config: DooverClientConfig, auth?: DooverAuth, private readonly onTransportFailure?: () => void) {
     this.config = {
@@ -80,6 +81,14 @@ export class RestClient {
   /** Attach a stats collector. Call with `null` to detach. */
   setStats(stats: DooverStatsCollector | null): void {
     this.stats = stats;
+  }
+
+  /** Called whenever a request is refused because the organisation requires MFA. */
+  onMfaRequired(listener: (error: DooverMfaRequiredError) => void): () => void {
+    this.mfaRequiredListeners.add(listener);
+    return () => {
+      this.mfaRequiredListeners.delete(listener);
+    };
   }
 
   async request<T>(options: RequestOptions): Promise<T> {
@@ -111,7 +120,7 @@ export class RestClient {
     }
 
     if (!response.ok) {
-      throw new DooverApiError({
+      const params = {
         status: response.status,
         body: payload,
         url: request.url,
@@ -123,7 +132,13 @@ export class RestClient {
           typeof (payload as { message?: unknown }).message === "string"
             ? (payload as { message: string }).message
             : undefined,
-      });
+      };
+      if (response.status === 403 && isMfaRequiredBody(payload)) {
+        const error = new DooverMfaRequiredError(params);
+        for (const listener of this.mfaRequiredListeners) listener(error);
+        throw error;
+      }
+      throw new DooverApiError(params);
     }
 
     return payload as T;

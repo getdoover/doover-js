@@ -10,4 +10,9 @@ export class UsersApi {
   getMe(): Promise<User> {
     return this.rest.get<User>("/users/me", undefined, this.controlApiUrl);
   }
+
+  /** Re-read the user's MFA enrollment from the identity provider. */
+  refreshMfa(): Promise<User> {
+    return this.rest.post<User>("/users/me/mfa/refresh/", undefined, undefined, this.controlApiUrl);
+  }
 }

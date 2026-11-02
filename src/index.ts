@@ -128,7 +128,9 @@ export type { DooverClientConfig } from "./http/rest-client.js";
 export {
   DooverApiError,
   DooverGatewayError,
+  DooverMfaRequiredError,
   DooverValidationError,
+  isMfaRequiredBody,
 } from "./http/errors.js";
 
 export { DooverDataProvider } from "./viewer/doover-data-provider.js";
