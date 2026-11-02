@@ -32,13 +32,26 @@ describe("DooverClient as DataClient", () => {
     expect((fetchMock as { called: boolean }).called).to.equal(false);
   });
 
-  it("isConnected mirrors the gateway; getStatus reflects it; clientId defaults to 'cloud'", () => {
+  it("reports connected only after the gateway reaches Ready", async () => {
     const client = makeClient();
     expect(client.isConnected()).to.equal(false);
-    const status = client.getStatus();
-    expect(status.clientId).to.equal("cloud");
-    expect(status.connected).to.equal(false);
-    expect(status.agentScope).to.deep.equal({ mode: "all" });
+    expect(client.getStatus().clientId).to.equal("cloud");
+    expect(client.getStatus().agentScope).to.deep.equal({ mode: "all" });
+
+    await client.gateway.connect();
+    const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    ws.open();
+    expect(client.gateway.isConnected()).to.equal(true);
+    expect(client.isConnected()).to.equal(false);
+    expect(client.getStatus().state).to.equal("connecting");
+
+    ws.receive({
+      op: 0,
+      t: "Ready",
+      d: { session_id: "s1", session_token: "t", subscriptions: [] },
+    });
+    expect(client.isConnected()).to.equal(true);
+    expect(client.getStatus().state).to.equal("connected");
   });
 
   it("honours a custom sourceId", () => {
