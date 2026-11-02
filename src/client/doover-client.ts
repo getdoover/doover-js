@@ -16,6 +16,7 @@ import { buildAuth } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
 import { GatewayClient } from "../gateway/gateway-client.js";
 import { RestClient, type DooverClientConfig } from "../http/rest-client.js";
+import type { DooverMfaRequiredError } from "../http/errors.js";
 import { RpcDispatcher } from "../rpc/rpc-dispatcher.js";
 import { DooverDataProvider } from "../viewer/doover-data-provider.js";
 import { ALL_CAPABILITIES, type Capability } from "./capabilities.js";
@@ -152,6 +153,11 @@ export class DooverClient implements DataClient {
   enableStats(): void { this.stats.setEnabled(true); }
   disableStats(): void { this.stats.setEnabled(false); }
   getStats(): DooverStatsSnapshot { return this.stats.snapshot(); }
+
+  /** Called whenever a request is refused because the organisation requires MFA. */
+  onMfaRequired(listener: (error: DooverMfaRequiredError) => void): () => void {
+    return this.rest.onMfaRequired(listener);
+  }
 
   // --- DataClient: capabilities ---
   getCapabilities(): ReadonlySet<Capability> { return ALL_CAPS_SET; }

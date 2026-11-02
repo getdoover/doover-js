@@ -85,6 +85,7 @@ const NONCORE_METHODS: Record<string, MethodSpec> = {
   // turn / users
   "turn.createTurnToken": { cap: "turn.credentials", kind: "read-fanout-first", agentScoped: false },
   "users.getMe": { cap: "users.me", kind: "read-fanout-first", agentScoped: false },
+  "users.refreshMfa": { cap: "users.me", kind: "read-fanout-first", agentScoped: false },
 };
 
 /** A serialisable description of a source. */

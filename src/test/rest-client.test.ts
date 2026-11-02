@@ -3,7 +3,7 @@ import chaiAsPromised from "chai-as-promised";
 import { beforeEach, describe, it } from "mocha";
 
 import { DooverAuth } from "../auth/doover-auth";
-import { DooverApiError } from "../http/errors";
+import { DooverApiError, DooverMfaRequiredError } from "../http/errors";
 import { RestClient } from "../http/rest-client";
 import {
   createBlobResponse,
@@ -240,5 +240,48 @@ describe("RestClient", () => {
     });
 
     await expect(client.get<string>("/text")).to.eventually.equal("plain text");
+  });
+
+  it("raises DooverMfaRequiredError and notifies listeners on mfa_required", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({ detail: "MFA required", code: "mfa_required" }, { status: 403 }),
+    );
+    const client = new RestClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+    const seen: DooverMfaRequiredError[] = [];
+    const unsubscribe = client.onMfaRequired((error) => seen.push(error));
+
+    await expect(client.get("/devices")).to.be.rejectedWith(DooverMfaRequiredError);
+    expect(seen).to.have.length(1);
+    expect(seen[0].status).to.equal(403);
+
+    unsubscribe();
+    await expect(client.get("/devices")).to.be.rejectedWith(DooverMfaRequiredError);
+    expect(seen).to.have.length(1);
+  });
+
+  it("keeps other 403s as plain DooverApiError", async () => {
+    const fetchMock = createFetchMock(() =>
+      createJsonResponse({ detail: "Forbidden" }, { status: 403 }),
+    );
+    const client = new RestClient({
+      dataRestUrl: "https://api.example.com",
+      controlApiUrl: "https://control.example.com",
+      dataWssUrl: "wss://ws.example.com",
+      fetchImpl: fetchMock as typeof fetch,
+    });
+    let called = false;
+    client.onMfaRequired(() => {
+      called = true;
+    });
+
+    const error = await client.get("/devices").catch((e: unknown) => e);
+    expect(error).to.be.instanceOf(DooverApiError);
+    expect(error).not.to.be.instanceOf(DooverMfaRequiredError);
+    expect(called).to.equal(false);
   });
 });

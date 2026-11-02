@@ -280,6 +280,7 @@ const METHOD_TO_CAPABILITY: Record<string, Capability> = {
   "messages.getInvocationLogs": "messages.invocationLogs",
   "rpc.send": "rpc.send",
   "users.getMe": "users.me",
+  "users.refreshMfa": "users.me",
   "turn.createTurnToken": "turn.credentials",
 };
 

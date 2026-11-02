@@ -20,6 +20,21 @@ export class DooverApiError extends Error {
   }
 }
 
+export class DooverMfaRequiredError extends DooverApiError {
+  constructor(params: ConstructorParameters<typeof DooverApiError>[0]) {
+    super(params);
+    this.name = "DooverMfaRequiredError";
+  }
+}
+
+export function isMfaRequiredBody(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    (body as { code?: unknown }).code === "mfa_required"
+  );
+}
+
 export class DooverValidationError extends Error {
   constructor(message: string) {
     super(message);

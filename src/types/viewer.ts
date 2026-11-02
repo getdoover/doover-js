@@ -34,6 +34,9 @@ export interface User {
   id: string;
   email?: string;
   name?: string;
+  mfa_enabled?: boolean;
+  /** True when the current organisation requires MFA this user hasn't set up. */
+  mfa_required?: boolean;
   __source?: SourceProvenance;
   [key: string]: unknown;
 }
