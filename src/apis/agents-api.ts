@@ -56,6 +56,8 @@ export interface AgentTokenState {
   self_rotation: TokenPolicyField<boolean>;
   max_age_ms: TokenPolicyField<number>;
   reuse_grace_ms: TokenPolicyField<number>;
+  /** Whether v1 mini-tokens and OAuth client secrets are refused. */
+  require_key_auth: TokenPolicyField<boolean>;
 }
 
 /**
@@ -76,6 +78,11 @@ export interface AgentTokenPolicy {
    * Setting this opts the device into *automatic* lockout on reuse detection.
    */
   reuse_grace_ms?: number | null;
+  /**
+   * Refuse v1 mini-tokens and OAuth client secrets, so only key pairs and API
+   * keys work for this device.
+   */
+  require_key_auth?: boolean | null;
 }
 
 export interface ResourcePermission {
