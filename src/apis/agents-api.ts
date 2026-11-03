@@ -89,7 +89,7 @@ export interface AdhocTokenResponse {
   token_id: string | null;
 }
 
-export type CredentialKind = "api_key" | "device_key";
+export type CredentialKind = "api_key" | "device_key" | "enrolment_code";
 
 /**
  * Narrows an API key below its agent's own access; the key can do what both
@@ -136,6 +136,8 @@ export interface AgentCredential {
   restriction?: KeyRestriction | null;
   /** Unix ms after which it stops working. Null: never. */
   expires_ms?: number | null;
+  /** For an enrolment code: the device key it enrolled, once used. */
+  enrolled_key?: string | null;
 }
 
 export interface CreatedCredential extends AgentCredential {
@@ -594,6 +596,24 @@ export class AgentsApi {
       kind: "device_key",
       name,
       public_key: publicKey,
+    });
+  }
+
+  /**
+   * Mint an enrolment code for a device: the device redeems it once at
+   * `POST /enrol` with its public key, which adds a device public key to it.
+   * The code is in the response once. Expires after 4 hours unless
+   * `expiresMs` says otherwise (at most 7 days).
+   */
+  createEnrolmentCode(
+    agentId: string,
+    name: string,
+    expiresMs?: number,
+  ): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "enrolment_code",
+      name,
+      expires_ms: expiresMs,
     });
   }
 

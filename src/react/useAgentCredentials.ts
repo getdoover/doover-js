@@ -66,6 +66,16 @@ export function useAddDeviceKey(agentId: string | undefined) {
   );
 }
 
+/** Mint a one-time enrolment code for a device. Shown once. */
+export function useCreateEnrolmentCode(agentId: string | undefined) {
+  const client = useDooverClient();
+  return useCredentialMutation(
+    agentId,
+    (id, vars: { name: string; expiresMs?: number }) =>
+      client.agents.createEnrolmentCode(id, vars.name, vars.expiresMs),
+  );
+}
+
 /** Revoke an API key or device key. Takes effect at once. */
 export function useRevokeCredential(agentId: string | undefined) {
   const client = useDooverClient();

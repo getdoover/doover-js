@@ -117,6 +117,7 @@ export {
   useAgentCredentials,
   useCreateApiKey,
   useAddDeviceKey,
+  useCreateEnrolmentCode,
   useRevokeCredential,
   agentCredentialsQueryKey,
 } from "./useAgentCredentials.js";

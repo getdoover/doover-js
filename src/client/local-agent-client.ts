@@ -261,6 +261,7 @@ const METHOD_TO_CAPABILITY: Record<string, Capability> = {
   "agents.listCredentials": "agents.tokenRead",
   "agents.createApiKey": "agents.tokenManage",
   "agents.addDeviceKey": "agents.tokenManage",
+  "agents.createEnrolmentCode": "agents.tokenManage",
   "agents.revokeCredential": "agents.tokenManage",
   "channels.listChannels": "channels.list",
   "channels.getChannel": "channels.get",
