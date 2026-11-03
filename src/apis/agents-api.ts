@@ -85,6 +85,27 @@ export interface AdhocTokenResponse {
   token_id: string | null;
 }
 
+export type CredentialKind = "api_key" | "device_key";
+
+/** An agent's API key or device key. Never includes the secret. */
+export interface AgentCredential {
+  id: string;
+  kind: CredentialKind;
+  name: string;
+  /** The agent (user or device) that created it. */
+  created_by: string;
+  created_ms: number;
+  /** Updated at most hourly. */
+  last_used_ms?: number | null;
+  /** Set once revoked. A revoked credential stays listed. */
+  revoked_ms?: number | null;
+}
+
+export interface CreatedCredential extends AgentCredential {
+  /** The API key itself (`dv_key_…`). Shown once; absent for a device key. */
+  key?: string;
+}
+
 export interface DeviceTokenResponse {
   /** Shown once. Not stored anywhere and not retrievable afterwards. */
   token: string;
@@ -489,6 +510,53 @@ export class AgentsApi {
       format: "mini_v1",
       revoke_existing: false,
     });
+  }
+
+  /**
+   * An agent's API keys and device keys, newest first, revoked ones included.
+   * Requires `AgentTokenRead`.
+   */
+  listCredentials(agentId: string): Promise<AgentCredential[]> {
+    return this.rest.get<AgentCredential[]>(`/agents/${agentId}/credentials`);
+  }
+
+  /**
+   * Mint an API key for an agent. It acts as the agent, with the agent's
+   * grants, as `Authorization: Bearer dv_key_…`, and works against doover-data
+   * only for now. The key is in the response once and never again.
+   */
+  createApiKey(agentId: string, name: string): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "api_key",
+      name,
+    });
+  }
+
+  /**
+   * Register a device's P-256 public key (PEM or JWK). The device then
+   * authenticates to `/oauth2/token` with assertions signed by its private key
+   * and gets 24 hour tokens.
+   */
+  addDeviceKey(
+    agentId: string,
+    name: string,
+    publicKey: string,
+  ): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "device_key",
+      name,
+      public_key: publicKey,
+    });
+  }
+
+  /**
+   * Revoke an API key or device key. Takes effect at once, including for
+   * tokens already issued from a device key.
+   */
+  revokeCredential(agentId: string, credentialId: string): Promise<void> {
+    return this.rest.delete<void>(
+      `/agents/${agentId}/credentials/${credentialId}`,
+    );
   }
 }
 

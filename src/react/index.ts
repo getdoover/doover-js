@@ -114,6 +114,14 @@ export {
 export type { UseAgentTokenStateOptions } from "./useAgentTokenState.js";
 
 export {
+  useAgentCredentials,
+  useCreateApiKey,
+  useAddDeviceKey,
+  useRevokeCredential,
+  agentCredentialsQueryKey,
+} from "./useAgentCredentials.js";
+
+export {
   getSharedQueryClient,
   resetSharedQueryClient,
 } from "./sharedQueryClient.js";
