@@ -31,6 +31,7 @@ export type {
   AgentCredential,
   CreatedCredential,
   CredentialKind,
+  KeyRestriction,
 } from "./apis/agents-api.js";
 export { AggregatesApi } from "./apis/aggregates-api.js";
 export { AlarmsApi } from "./apis/alarms-api.js";

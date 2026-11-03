@@ -5,7 +5,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { AgentCredential } from "../apis/agents-api.js";
+import type { AgentCredential, KeyRestriction } from "../apis/agents-api.js";
 import { useDooverClient } from "./context.js";
 
 export function agentCredentialsQueryKey(agentId: string | undefined) {
@@ -43,8 +43,16 @@ function useCredentialMutation<V, R>(
 /** Mint an API key. The key is in the result once; hand it straight to the user. */
 export function useCreateApiKey(agentId: string | undefined) {
   const client = useDooverClient();
-  return useCredentialMutation(agentId, (id, name: string) =>
-    client.agents.createApiKey(id, name),
+  return useCredentialMutation(
+    agentId,
+    (
+      id,
+      vars: { name: string; restriction?: KeyRestriction; expiresMs?: number },
+    ) =>
+      client.agents.createApiKey(id, vars.name, {
+        restriction: vars.restriction,
+        expiresMs: vars.expiresMs,
+      }),
   );
 }
 
