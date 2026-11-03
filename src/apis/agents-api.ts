@@ -100,6 +100,20 @@ export interface KeyRestriction {
   read_only?: boolean;
   /** Only these agents and their channels. Omit for everything. */
   agents?: string[];
+  /**
+   * A custom policy instead of `read_only` and `agents`: named-action
+   * statements, `data:` actions only. Still intersected with the agent's
+   * own access.
+   */
+  policy?: KeyPolicy;
+}
+
+export interface KeyPolicy {
+  statements: {
+    effect: "allow" | "deny";
+    actions: string[];
+    resources: string[];
+  }[];
 }
 
 /** An agent's API key or device key. Never includes the secret. */
