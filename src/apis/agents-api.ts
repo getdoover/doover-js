@@ -113,6 +113,11 @@ export interface KeyPolicy {
     effect: "allow" | "deny";
     actions: string[];
     resources: string[];
+    /** Missing request values never widen access. */
+    conditions?: {
+      source_ip?: { in: string[] } | { not_in: string[] };
+      transport?: { in: string[] } | { not_in: string[] };
+    };
   }[];
 }
 
