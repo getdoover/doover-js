@@ -157,7 +157,10 @@ export class RestClient {
     body: BodyInit | undefined;
     credentials: RequestCredentials;
   } {
-    const method = options.method ?? "GET";
+    // fetch normalises GET, POST, PUT and DELETE but not PATCH, and a CORS
+    // preflight compares methods case-sensitively; refine's custom calls
+    // pass them lowercase.
+    const method = (options.method ?? "GET").toUpperCase();
     const url = this.buildUrl(options.baseUrl ?? this.config.dataRestUrl, options.path, options.query);
     const headers = new Headers(options.headers);
     const body = this.normalizeBody(options.body, headers);
