@@ -4,7 +4,11 @@ import type {
   BatchMessagesResponse,
   MessageStructure,
 } from "../types/openapi.js";
-import type { Agent, AgentsResponse, GetAgentsOptions } from "../types/viewer.js";
+import type {
+  Agent,
+  AgentsResponse,
+  GetAgentsOptions,
+} from "../types/viewer.js";
 import { addTimestampToMessage } from "../utils/snowflake.js";
 import type { RestClient } from "../http/rest-client.js";
 import type { DooverRequestOptions } from "../client/request-options.js";
@@ -52,6 +56,8 @@ export interface AgentTokenState {
   self_rotation: TokenPolicyField<boolean>;
   max_age_ms: TokenPolicyField<number>;
   reuse_grace_ms: TokenPolicyField<number>;
+  /** Whether v1 mini-tokens and OAuth client secrets are refused. */
+  require_key_auth: TokenPolicyField<boolean>;
 }
 
 /**
@@ -72,6 +78,11 @@ export interface AgentTokenPolicy {
    * Setting this opts the device into *automatic* lockout on reuse detection.
    */
   reuse_grace_ms?: number | null;
+  /**
+   * Refuse v1 mini-tokens and OAuth client secrets, so only key pairs and API
+   * keys work for this device.
+   */
+  require_key_auth?: boolean | null;
 }
 
 export interface ResourcePermission {
@@ -83,6 +94,64 @@ export interface AdhocTokenResponse {
   /** Shown once. Not retrievable afterwards. */
   token: string;
   token_id: string | null;
+}
+
+export type CredentialKind = "api_key" | "device_key" | "enrolment_code";
+
+/**
+ * Narrows an API key below its agent's own access; the key can do what both
+ * allow. A restricted key never gets control-plane or superuser powers.
+ */
+export interface KeyRestriction {
+  /** Only reading and subscribing. */
+  read_only?: boolean;
+  /** Only these agents and their channels. Omit for everything. */
+  agents?: string[];
+  /**
+   * A custom policy instead of `read_only` and `agents`: named-action
+   * statements, `data:` actions only. Still intersected with the agent's
+   * own access.
+   */
+  policy?: KeyPolicy;
+}
+
+export interface KeyPolicy {
+  statements: {
+    effect: "allow" | "deny";
+    actions: string[];
+    resources: string[];
+    /** Missing request values never widen access. */
+    conditions?: {
+      source_ip?: { in: string[] } | { not_in: string[] };
+      transport?: { in: string[] } | { not_in: string[] };
+    };
+  }[];
+}
+
+/** An agent's API key or device key. Never includes the secret. */
+export interface AgentCredential {
+  id: string;
+  /** The agent it belongs to. */
+  agent_id: string;
+  kind: CredentialKind;
+  name: string;
+  /** The agent (user or device) that created it. */
+  created_by: string;
+  created_ms: number;
+  /** Updated at most hourly. */
+  last_used_ms?: number | null;
+  /** Set once revoked. A revoked credential stays listed. */
+  revoked_ms?: number | null;
+  restriction?: KeyRestriction | null;
+  /** Unix ms after which it stops working. Null: never. */
+  expires_ms?: number | null;
+  /** For an enrolment code: the device key it enrolled, once used. */
+  enrolled_key?: string | null;
+}
+
+export interface CreatedCredential extends AgentCredential {
+  /** The API key itself (`dv_key_…`). Shown once; absent for a device key. */
+  key?: string;
 }
 
 export interface DeviceTokenResponse {
@@ -107,11 +176,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function buildUserDisplayName(rawUser: unknown): string {
-  const source: Record<string, unknown> = isPlainObject(rawUser)
-    ? rawUser
-    : {};
-  const firstName = typeof source.first_name === "string" ? source.first_name.trim() : "";
-  const lastName = typeof source.last_name === "string" ? source.last_name.trim() : "";
+  const source: Record<string, unknown> = isPlainObject(rawUser) ? rawUser : {};
+  const firstName =
+    typeof source.first_name === "string" ? source.first_name.trim() : "";
+  const lastName =
+    typeof source.last_name === "string" ? source.last_name.trim() : "";
   const fullName = `${firstName} ${lastName}`.trim();
   if (fullName !== "") {
     return fullName;
@@ -199,10 +268,9 @@ function normalizeOrganisationEntry(rawOrganisation: unknown): Agent {
 }
 
 function normalizeUserEntry(rawUser: unknown): Agent {
-  const source: Record<string, unknown> = isPlainObject(rawUser)
-    ? rawUser
-    : {};
-  const id = typeof source.id === "string" ? source.id : String(source.id ?? "");
+  const source: Record<string, unknown> = isPlainObject(rawUser) ? rawUser : {};
+  const id =
+    typeof source.id === "string" ? source.id : String(source.id ?? "");
   const username = typeof source.username === "string" ? source.username : "";
   const email = typeof source.email === "string" ? source.email : "";
 
@@ -241,7 +309,8 @@ export class AgentsApi {
     const agentOptions = options as GetAgentsOptions | undefined;
     const query: Record<string, boolean> = {};
     if (agentOptions?.includeArchived) query["include-archived"] = true;
-    if (agentOptions?.includeOrganisations) query["include-organisations"] = true;
+    if (agentOptions?.includeOrganisations)
+      query["include-organisations"] = true;
     if (agentOptions?.includeUsers) query["include-users"] = true;
 
     const raw = await this.rest.request<AgentsResponse>({
@@ -286,7 +355,9 @@ export class AgentsApi {
   ): Promise<BatchMessagesResponse> {
     const path = `/agents/channels/${channelName}/messages`;
     const { agent_id, agent_before, ...rest } = params;
-    const stampTimestamps = (response: BatchMessagesResponse): BatchMessagesResponse => ({
+    const stampTimestamps = (
+      response: BatchMessagesResponse,
+    ): BatchMessagesResponse => ({
       ...response,
       results: response.results.map((message) =>
         "timestamp" in message ? message : addTimestampToMessage(message),
@@ -489,6 +560,92 @@ export class AgentsApi {
       format: "mini_v1",
       revoke_existing: false,
     });
+  }
+
+  /**
+   * An agent's API keys and device keys, newest first, revoked ones included.
+   * Requires `AgentTokenRead`.
+   */
+  listCredentials(agentId: string): Promise<AgentCredential[]> {
+    return this.rest.get<AgentCredential[]>(`/agents/${agentId}/credentials`);
+  }
+
+  /**
+   * Every credential on an organisation's agents (devices and service
+   * accounts) that you may list, each with its `agent_id`, newest first.
+   */
+  listOrganisationCredentials(
+    organisationId: string,
+  ): Promise<AgentCredential[]> {
+    return this.rest.get<AgentCredential[]>(
+      `/organisations/${organisationId}/credentials`,
+    );
+  }
+
+  /**
+   * Mint an API key for an agent. It acts as the agent, with the agent's
+   * grants, as `Authorization: Bearer dv_key_…`, and works against doover-data
+   * only for now. The key is in the response once and never again.
+   *
+   * `restriction` narrows it (read-only, chosen agents) and `expiresMs` ends
+   * it; both only ever take access away from what the agent has.
+   */
+  createApiKey(
+    agentId: string,
+    name: string,
+    options: { restriction?: KeyRestriction; expiresMs?: number } = {},
+  ): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "api_key",
+      name,
+      restriction: options.restriction,
+      expires_ms: options.expiresMs,
+    });
+  }
+
+  /**
+   * Register a device's P-256 public key (PEM or JWK). The device then
+   * authenticates to `/oauth2/token` with assertions signed by its private key
+   * and gets 24 hour tokens.
+   */
+  addDeviceKey(
+    agentId: string,
+    name: string,
+    publicKey: string,
+  ): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "device_key",
+      name,
+      public_key: publicKey,
+    });
+  }
+
+  /**
+   * Mint an enrolment code for a device: the device redeems it once at
+   * `POST /enrol` with its public key, which adds a device public key to it.
+   * The code is in the response once. Expires after 4 hours unless
+   * `expiresMs` says otherwise (at most 7 days).
+   */
+  createEnrolmentCode(
+    agentId: string,
+    name: string,
+    expiresMs?: number,
+  ): Promise<CreatedCredential> {
+    return this.rest.post<CreatedCredential>(`/agents/${agentId}/credentials`, {
+      kind: "enrolment_code",
+      name,
+      expires_ms: expiresMs,
+    });
+  }
+
+  /**
+   * Revoke an API key or device key. Takes effect at once, including for
+   * tokens already issued from a device key.
+   */
+  revokeCredential(agentId: string, credentialId: string): Promise<void> {
+    return this.rest.delete<void>(
+      `/agents/${agentId}/credentials/${credentialId}`,
+    );
   }
 }
 

@@ -1,23 +1,31 @@
 export { DooverProvider, useDooverClient } from "./context.js";
 export type { DooverProviderProps } from "./context.js";
 
-export type { DataClientStatus, DataClientConnectionState, AgentScope } from "../client/data-client.js";
+export type {
+  DataClientStatus,
+  DataClientConnectionState,
+  AgentScope,
+} from "../client/data-client.js";
 
 export { useClientStatus } from "./useClientStatus.js";
 export { useOfflineStatus, hasOfflineStatus } from "./useOfflineStatus.js";
-export type { OfflineStatusSnapshot, OfflineStatusClient } from "./useOfflineStatus.js";
+export type {
+  OfflineStatusSnapshot,
+  OfflineStatusClient,
+} from "./useOfflineStatus.js";
 
 export { useConnectionState } from "./useConnectionState.js";
-export type { ConnectionState, ConnectionStatus } from "./useConnectionState.js";
+export type {
+  ConnectionState,
+  ConnectionStatus,
+} from "./useConnectionState.js";
 
 export {
   useAgentConnections,
   agentConnectionsQueryKey,
 } from "./useAgentConnections.js";
 
-export {
-  useChannelSubscription,
-} from "./useChannelSubscription.js";
+export { useChannelSubscription } from "./useChannelSubscription.js";
 export type { ChannelSubscriptionHandlers } from "./useChannelSubscription.js";
 
 export {
@@ -112,6 +120,17 @@ export {
   agentTokenStateQueryKey,
 } from "./useAgentTokenState.js";
 export type { UseAgentTokenStateOptions } from "./useAgentTokenState.js";
+
+export {
+  useAgentCredentials,
+  useOrganisationCredentials,
+  organisationCredentialsQueryKey,
+  useCreateApiKey,
+  useAddDeviceKey,
+  useCreateEnrolmentCode,
+  useRevokeCredential,
+  agentCredentialsQueryKey,
+} from "./useAgentCredentials.js";
 
 export {
   getSharedQueryClient,

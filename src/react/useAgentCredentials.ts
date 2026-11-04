@@ -1,0 +1,114 @@
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
+
+import type { AgentCredential, KeyRestriction } from "../apis/agents-api.js";
+import { useDooverClient } from "./context.js";
+
+export function agentCredentialsQueryKey(agentId: string | undefined) {
+  return ["doover", "agent", agentId ?? null, "credentials"] as const;
+}
+
+export function organisationCredentialsQueryKey(
+  organisationId: string | undefined,
+) {
+  return [
+    "doover",
+    "organisation",
+    organisationId ?? null,
+    "credentials",
+  ] as const;
+}
+
+/** Every credential on an organisation's agents, revoked ones included. */
+export function useOrganisationCredentials(
+  organisationId: string | undefined,
+  options?: { enabled?: boolean },
+): UseQueryResult<AgentCredential[]> {
+  const client = useDooverClient();
+  return useQuery({
+    queryKey: organisationCredentialsQueryKey(organisationId),
+    enabled: (options?.enabled ?? true) && Boolean(organisationId),
+    queryFn: () =>
+      client.agents.listOrganisationCredentials(organisationId as string),
+  });
+}
+
+/** An agent's API keys and device keys, revoked ones included. */
+export function useAgentCredentials(
+  agentId: string | undefined,
+  options?: { enabled?: boolean },
+): UseQueryResult<AgentCredential[]> {
+  const client = useDooverClient();
+  return useQuery({
+    queryKey: agentCredentialsQueryKey(agentId),
+    enabled: (options?.enabled ?? true) && Boolean(agentId),
+    queryFn: () => client.agents.listCredentials(agentId as string),
+  });
+}
+
+function useCredentialMutation<V, R>(
+  agentId: string | undefined,
+  mutationFn: (agentId: string, vars: V) => Promise<R>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: V) => mutationFn(agentId as string, vars),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: agentCredentialsQueryKey(agentId),
+      });
+      // Org-wide lists include this agent's keys.
+      void queryClient.invalidateQueries({
+        queryKey: ["doover", "organisation"],
+      });
+    },
+  });
+}
+
+/** Mint an API key. The key is in the result once; hand it straight to the user. */
+export function useCreateApiKey(agentId: string | undefined) {
+  const client = useDooverClient();
+  return useCredentialMutation(
+    agentId,
+    (
+      id,
+      vars: { name: string; restriction?: KeyRestriction; expiresMs?: number },
+    ) =>
+      client.agents.createApiKey(id, vars.name, {
+        restriction: vars.restriction,
+        expiresMs: vars.expiresMs,
+      }),
+  );
+}
+
+/** Register a device's P-256 public key (PEM or JWK). */
+export function useAddDeviceKey(agentId: string | undefined) {
+  const client = useDooverClient();
+  return useCredentialMutation(
+    agentId,
+    (id, vars: { name: string; publicKey: string }) =>
+      client.agents.addDeviceKey(id, vars.name, vars.publicKey),
+  );
+}
+
+/** Mint a one-time enrolment code for a device. Shown once. */
+export function useCreateEnrolmentCode(agentId: string | undefined) {
+  const client = useDooverClient();
+  return useCredentialMutation(
+    agentId,
+    (id, vars: { name: string; expiresMs?: number }) =>
+      client.agents.createEnrolmentCode(id, vars.name, vars.expiresMs),
+  );
+}
+
+/** Revoke an API key or device key. Takes effect at once. */
+export function useRevokeCredential(agentId: string | undefined) {
+  const client = useDooverClient();
+  return useCredentialMutation(agentId, (id, credentialId: string) =>
+    client.agents.revokeCredential(id, credentialId),
+  );
+}

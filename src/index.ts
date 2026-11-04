@@ -28,6 +28,11 @@ export type {
   AdhocTokenResponse,
   DeviceTokenResponse,
   ResourcePermission,
+  AgentCredential,
+  CreatedCredential,
+  CredentialKind,
+  KeyRestriction,
+  KeyPolicy,
 } from "./apis/agents-api.js";
 export { AggregatesApi } from "./apis/aggregates-api.js";
 export { AlarmsApi } from "./apis/alarms-api.js";
