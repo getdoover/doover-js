@@ -7,13 +7,15 @@ import type {
 
 /**
  * Tracks a `DataClient`'s realtime status by subscribing to its gateway's
- * `open` / `ready` / `close` / `wssError` events. Emits a fresh
+ * `open` / `ready` / `sessionCancelled` / `close` / `wssError` events. Emits a fresh
  * `DataClientStatus` to listeners whenever the derived snapshot changes.
  */
 export class ClientStatusTracker {
   private lastEvent: string | undefined = "init";
   private lastError: string | undefined;
   private session: { id: string } | null = null;
+  /** True only after the gateway protocol has accepted Identify/Resume. */
+  private ready = false;
   private listeners = new Set<(status: DataClientStatus) => void>();
   private detach: Array<() => void> = [];
 
@@ -22,23 +24,37 @@ export class ClientStatusTracker {
     private readonly gateway: GatewayClientLike,
     private readonly knownScope: () => AgentScope | "unknown" | string,
   ) {
-    const onOpen = () => this.transition("open");
+    const onOpen = () => {
+      this.ready = false;
+      this.transition("open");
+    };
     const onReady = (s?: { session_id?: string }) => {
+      this.ready = true;
       if (s?.session_id) this.session = { id: s.session_id };
       this.transition("ready");
     };
-    const onClose = () => this.transition("close");
+    const onClose = () => {
+      this.ready = false;
+      this.transition("close");
+    };
+    const onSessionCancelled = () => {
+      this.ready = false;
+      this.session = null;
+      this.transition("sessionCancelled");
+    };
     const onErr = (e?: { message?: string }) => {
       this.lastError = e?.message ?? "gateway error";
       this.transition("error");
     };
     gateway.on("open", onOpen as never);
     gateway.on("ready", onReady as never);
+    gateway.on("sessionCancelled", onSessionCancelled as never);
     gateway.on("close", onClose as never);
     gateway.on("wssError", onErr as never);
     this.detach.push(
       () => gateway.off("open", onOpen as never),
       () => gateway.off("ready", onReady as never),
+      () => gateway.off("sessionCancelled", onSessionCancelled as never),
       () => gateway.off("close", onClose as never),
       () => gateway.off("wssError", onErr as never),
     );
@@ -50,7 +66,10 @@ export class ClientStatusTracker {
   }
 
   getStatus(): DataClientStatus {
-    const connected = this.gateway.isConnected();
+    // WebSocket.OPEN only confirms the transport. During an overnight resume
+    // failure, sockets can repeatedly open and close without ever reaching
+    // Ready. Do not advertise those attempts as usable realtime links.
+    const connected = this.ready && this.gateway.isConnected();
     let state: DataClientConnectionState;
     if (this.lastEvent === "error") state = "error";
     else if (connected) state = "connected";
