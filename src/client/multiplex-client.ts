@@ -693,6 +693,7 @@ export class MultiplexClient implements DataClient {
       createAdhocToken: self.routedWrite("agents.createAdhocToken", "agents.tokenManage") as never,
       createDeviceToken: self.routedWrite("agents.createDeviceToken", "agents.tokenManage") as never,
       listCredentials: self.makeFanoutFirst("agents.listCredentials", "agents.tokenRead") as never,
+      listOrganisationCredentials: self.makeFanoutFirst("agents.listOrganisationCredentials", "agents.tokenRead") as never,
       createApiKey: self.routedWrite("agents.createApiKey", "agents.tokenManage") as never,
       addDeviceKey: self.routedWrite("agents.addDeviceKey", "agents.tokenManage") as never,
       createEnrolmentCode: self.routedWrite("agents.createEnrolmentCode", "agents.tokenManage") as never,

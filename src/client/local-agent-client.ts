@@ -259,6 +259,7 @@ const METHOD_TO_CAPABILITY: Record<string, Capability> = {
   "agents.createAdhocToken": "agents.tokenManage",
   "agents.createDeviceToken": "agents.tokenManage",
   "agents.listCredentials": "agents.tokenRead",
+  "agents.listOrganisationCredentials": "agents.tokenRead",
   "agents.createApiKey": "agents.tokenManage",
   "agents.addDeviceKey": "agents.tokenManage",
   "agents.createEnrolmentCode": "agents.tokenManage",

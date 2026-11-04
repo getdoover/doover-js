@@ -131,6 +131,8 @@ export interface KeyPolicy {
 /** An agent's API key or device key. Never includes the secret. */
 export interface AgentCredential {
   id: string;
+  /** The agent it belongs to. */
+  agent_id: string;
   kind: CredentialKind;
   name: string;
   /** The agent (user or device) that created it. */
@@ -566,6 +568,18 @@ export class AgentsApi {
    */
   listCredentials(agentId: string): Promise<AgentCredential[]> {
     return this.rest.get<AgentCredential[]>(`/agents/${agentId}/credentials`);
+  }
+
+  /**
+   * Every credential on an organisation's agents (devices and service
+   * accounts) that you may list, each with its `agent_id`, newest first.
+   */
+  listOrganisationCredentials(
+    organisationId: string,
+  ): Promise<AgentCredential[]> {
+    return this.rest.get<AgentCredential[]>(
+      `/organisations/${organisationId}/credentials`,
+    );
   }
 
   /**

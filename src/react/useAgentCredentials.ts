@@ -12,6 +12,31 @@ export function agentCredentialsQueryKey(agentId: string | undefined) {
   return ["doover", "agent", agentId ?? null, "credentials"] as const;
 }
 
+export function organisationCredentialsQueryKey(
+  organisationId: string | undefined,
+) {
+  return [
+    "doover",
+    "organisation",
+    organisationId ?? null,
+    "credentials",
+  ] as const;
+}
+
+/** Every credential on an organisation's agents, revoked ones included. */
+export function useOrganisationCredentials(
+  organisationId: string | undefined,
+  options?: { enabled?: boolean },
+): UseQueryResult<AgentCredential[]> {
+  const client = useDooverClient();
+  return useQuery({
+    queryKey: organisationCredentialsQueryKey(organisationId),
+    enabled: (options?.enabled ?? true) && Boolean(organisationId),
+    queryFn: () =>
+      client.agents.listOrganisationCredentials(organisationId as string),
+  });
+}
+
 /** An agent's API keys and device keys, revoked ones included. */
 export function useAgentCredentials(
   agentId: string | undefined,
@@ -35,6 +60,10 @@ function useCredentialMutation<V, R>(
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: agentCredentialsQueryKey(agentId),
+      });
+      // Org-wide lists include this agent's keys.
+      void queryClient.invalidateQueries({
+        queryKey: ["doover", "organisation"],
       });
     },
   });
