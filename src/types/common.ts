@@ -1,3 +1,4 @@
+import type { KeyPolicy } from "../apis/agents-api.js";
 import type { SourceProvenance } from "./provenance.js";
 
 export type JSONPrimitive = null | boolean | number | string;
@@ -186,6 +187,12 @@ export interface AgentPermission {
   is_superuser: boolean;
   resources: ResourcePermission[];
   last_updated?: number | null;
+  /** The agent's access as named-action policy statements, synced by
+   * control. For one decided by policy, the whole decision. */
+  policy?: KeyPolicy | null;
+  /** Decided by `policy` alone (control's policy path): check it with
+   * `policyAllows` rather than `resources`. */
+  decided_by_policy?: boolean;
   __source?: SourceProvenance;
 }
 
