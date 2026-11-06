@@ -1,27 +1,15 @@
 import type { KeyPolicy } from "../apis/agents-api.js";
 
-/**
- * What a check is about, for {@link policyAllows}: the action, and where it
- * acts. A device or user is `agent`; a channel is `agent` plus `channel`; a
- * control object is `kind` and `id` (e.g. `"application"`, `"42"`). `org`
- * and `groups` (the resource's group and its ancestors) let `org:` and
- * `group:` statements match.
- */
-export interface PolicyRequest {
+interface PolicyRequest {
   action: string;
   agent?: string;
   channel?: string;
-  kind?: string;
-  id?: string;
   org?: string;
+  /** The resource's group and its ancestors. */
   groups?: string[];
 }
 
-const INTERNAL = ":internal.";
-// Only a statement naming one of these exactly reaches it.
 const RESERVED_CHANNELS = new Set(["tunnels", "dv-audit", "dv-registry"]);
-
-type Statement = KeyPolicy["statements"][number];
 
 function globMatches(pattern: string, value: string | undefined): boolean {
   if (value === undefined) return false;
@@ -30,13 +18,7 @@ function globMatches(pattern: string, value: string | undefined): boolean {
     : pattern === value;
 }
 
-/** At most one `*`, matching any run of characters. A wildcard allows an
- * internal action only when it spells out `internal.`; a deny covers it. */
-function actionMatches(
-  pattern: string,
-  action: string,
-  effect: Statement["effect"],
-): boolean {
+function actionMatches(pattern: string, action: string, deny: boolean) {
   const star = pattern.indexOf("*");
   if (star < 0) return pattern === action;
   const prefix = pattern.slice(0, star);
@@ -45,60 +27,41 @@ function actionMatches(
     action.length >= prefix.length + suffix.length &&
     action.startsWith(prefix) &&
     action.endsWith(suffix) &&
-    (effect === "deny" ||
-      !action.includes(INTERNAL) ||
-      prefix.includes(INTERNAL))
+    // An allow wildcard reaches internal actions only by spelling them out.
+    (deny || !action.includes(":internal.") || prefix.includes(":internal."))
   );
 }
 
-function childOf(pattern: string): [string, string] | null {
-  // agent:{id}/channel:{name}
-  const slash = pattern.indexOf("/");
-  if (slash < 0) return null;
-  const agentPart = pattern.slice(0, slash);
-  const childPart = pattern.slice(slash + 1);
-  if (!agentPart.startsWith("agent:") || !childPart.startsWith("channel:")) {
-    return null;
-  }
-  return [agentPart.slice("agent:".length), childPart.slice("channel:".length)];
-}
-
 function resourceMatches(pattern: string, req: PolicyRequest): boolean {
-  const child = childOf(pattern);
+  const [agentPart, childPart] = pattern.split("/", 2);
   if (req.channel !== undefined && RESERVED_CHANNELS.has(req.channel)) {
-    // Never covered by a broader grant: only a pattern naming it exactly.
     return (
-      child !== null &&
-      child[1] === req.channel &&
-      globMatches(child[0], req.agent)
+      childPart === `channel:${req.channel}` &&
+      globMatches(agentPart.slice("agent:".length), req.agent)
     );
   }
   if (pattern === "*") return true;
-  if (child) {
+  const [kind, value] = [
+    agentPart.slice(0, agentPart.indexOf(":")),
+    agentPart.slice(agentPart.indexOf(":") + 1),
+  ];
+  if (childPart !== undefined) {
     return (
-      req.channel !== undefined &&
-      globMatches(child[0], req.agent) &&
-      globMatches(child[1], req.channel)
+      kind === "agent" &&
+      childPart.startsWith("channel:") &&
+      globMatches(value, req.agent) &&
+      globMatches(childPart.slice("channel:".length), req.channel)
     );
   }
-  const colon = pattern.indexOf(":");
-  if (colon < 0) return false;
-  const kind = pattern.slice(0, colon);
-  const value = pattern.slice(colon + 1);
   if (kind === "org") return globMatches(value, req.org);
-  if (kind === "group") {
+  if (kind === "group")
     return (req.groups ?? []).some((g) => globMatches(value, g));
-  }
-  if (kind === "agent") return globMatches(value, req.agent);
-  return kind === req.kind && globMatches(value, req.id);
+  return kind === "agent" && globMatches(value, req.agent);
 }
 
 /**
- * Whether `policy` allows `req`, by the rules doover-data and doover-control
- * enforce: a matching deny wins, else any matching allow. A statement with
- * no resources applies everywhere. Conditions (source IP, transport) can't
- * be known here and are taken as met: this is for what a page offers, and
- * the API still decides.
+ * Whether `policy` allows `req`, as doover-data decides it: a matching deny
+ * wins. Conditions are taken as met; the API still decides.
  */
 export function policyAllows(
   policy: KeyPolicy | null | undefined,
@@ -106,12 +69,11 @@ export function policyAllows(
 ): boolean {
   let allowed = false;
   for (const st of policy?.statements ?? []) {
-    if (!st.actions.some((a) => actionMatches(a, req.action, st.effect))) {
-      continue;
-    }
+    const deny = st.effect === "deny";
+    if (!st.actions.some((a) => actionMatches(a, req.action, deny))) continue;
     const resources = st.resources?.length ? st.resources : ["*"];
     if (!resources.some((r) => resourceMatches(r, req))) continue;
-    if (st.effect === "deny") return false;
+    if (deny) return false;
     allowed = true;
   }
   return allowed;
