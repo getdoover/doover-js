@@ -21,6 +21,7 @@ export type {
 } from "./client/stats.js";
 
 export { AgentsApi } from "./apis/agents-api.js";
+export { policyAllows } from "./utils/policy.js";
 export type {
   AgentTokenState,
   AgentTokenPolicy,
