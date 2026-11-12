@@ -6,6 +6,9 @@ import type {
   RpcDispatcherLike, TurnApiLike, UsersApiLike,
 } from "./data-client.js";
 import { dedupeBy, mergeMessages } from "./multiplex-merge.js";
+import { mergeConnectionHistory, mergeMessageCounts } from "../apis/agents-api.js";
+import type { ConnectionHistoryResponse } from "../types/connection.js";
+import type { MessageCountsResponse } from "../types/openapi.js";
 import { mergeBatchResponses, type BatchResponse, type BatchResultItem } from "../types/batch.js";
 import { UnsupportedCapabilityError, AmbiguousWriteError } from "./errors.js";
 import { extractSnowflakeId } from "../utils/snowflake.js";
@@ -684,6 +687,22 @@ export class MultiplexClient implements DataClient {
         const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentAggregates as (...a: unknown[]) => Promise<{ results: { agent_id: string }[] }>)(...args)));
         const merged = dedupeBy(([] as { agent_id: string }[]).concat(...responses.map((r) => r.results)), (a) => a.agent_id);
         return { results: merged, count: merged.length } as never;
+      },
+      async getMultiAgentConnectionHistory(...rawArgs: unknown[]) {
+        const { args, sources } = self.splitSourcesOption(rawArgs);
+        self.assertSomeMemberSupports("agents.multiAgentConnectionHistory");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentConnectionHistory"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentConnectionHistory as (...a: unknown[]) => Promise<ConnectionHistoryResponse>)(...args)));
+        return mergeConnectionHistory(responses) as never;
+      },
+      async getMultiAgentMessageCounts(channelName: unknown, ...rest: unknown[]) {
+        const { args, sources } = self.splitSourcesOption([channelName, ...rest]);
+        self.assertSomeMemberSupports("agents.multiAgentMessageCounts");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentMessageCounts"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentMessageCounts as (...a: unknown[]) => Promise<MessageCountsResponse>)(...args)));
+        return mergeMessageCounts(responses) as never;
       },
       getTokenState: self.makeFanoutFirst("agents.getTokenState", "agents.tokenRead") as never,
       setTokenPolicy: self.routedWrite("agents.setTokenPolicy", "agents.tokenManage") as never,

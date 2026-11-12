@@ -75,6 +75,31 @@ export interface BatchAggregatesResponse {
   count: number;
 }
 
+/** Messages stored on a channel for one UTC day (`GET /agents/channels/{channel}/messages/counts`). */
+export interface DayCount {
+  /** UTC day start, epoch ms. */
+  start: number;
+  /** Messages retained for the day: a deleted message counts down. */
+  count: number;
+}
+
+export interface AgentMessageCounts {
+  id: string;
+  /** Oldest first; days with no messages are absent. */
+  days: DayCount[];
+}
+
+export interface MessageCountsResponse {
+  /** Epoch ms, inclusive. */
+  start: number;
+  /** Epoch ms, exclusive; the requested `before` clipped to now. */
+  end: number;
+  /** Sorted by id. Agents the caller cannot read are absent. */
+  agents: AgentMessageCounts[];
+  /** Every agent's counts summed, by day, oldest first. */
+  totals: DayCount[];
+}
+
 export interface NotificationDataResponse {
   subscriptions: NotificationSubscription[];
   subscribers: NotificationSubscription[];

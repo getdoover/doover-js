@@ -22,7 +22,10 @@ export type {
 
 export { AgentsApi } from "./apis/agents-api.js";
 export { policyAllows } from "./utils/policy.js";
+export { mergeConnectionHistory, mergeMessageCounts } from "./apis/agents-api.js";
 export type {
+  ConnectionHistoryParams,
+  MultiAgentMessageCountsParams,
   AgentTokenState,
   AgentTokenPolicy,
   TokenPolicyField,

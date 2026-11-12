@@ -138,3 +138,20 @@ export {
 } from "./sharedQueryClient.js";
 
 export { useServiceReachability } from "./useServiceReachability.js";
+
+export {
+  useMultiAgentConnectionHistory,
+  multiAgentConnectionHistoryQueryKey,
+} from "./useMultiAgentConnectionHistory.js";
+export type {
+  UseMultiAgentConnectionHistoryOptions,
+  UseMultiAgentConnectionHistoryResult,
+} from "./useMultiAgentConnectionHistory.js";
+export {
+  useMultiAgentMessageCounts,
+  multiAgentMessageCountsQueryKey,
+} from "./useMultiAgentMessageCounts.js";
+export type {
+  UseMultiAgentMessageCountsOptions,
+  UseMultiAgentMessageCountsResult,
+} from "./useMultiAgentMessageCounts.js";

@@ -93,6 +93,82 @@ describe("API clients", () => {
     expect(returnedIds).to.deep.equal([...agentIds].sort());
   });
 
+  it("fetches connection history and merges chunks slot by slot", async () => {
+    const { rest, fetchMock } = setupRest((url) => {
+      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      return createJsonResponse({
+        start: 0,
+        end: 7_200_000,
+        agents: ids.map((id) => ({
+          id,
+          state_at_start: "Online",
+          state_at_end: "Online",
+          uptime: 1,
+          truncated: false,
+        })),
+        buckets: [
+          { start: 0, end: 3_600_000, online: ids.length, sleeping: 0, offline: 0, unknown: 0, came_up: [], went_down: [] },
+          { start: 3_600_000, end: 7_200_000, online: ids.length - 1, sleeping: 0, offline: 1, unknown: 0, came_up: [], went_down: [ids[0]] },
+        ],
+      });
+    });
+    const api = new AgentsApi(rest);
+
+    const small = await api.getMultiAgentConnectionHistory({
+      agent_id: ["a1", "a2"],
+      after: "1",
+      bucket_ms: 3_600_000,
+      include_segments: true,
+    });
+    expect(small.agents.map((a) => a.id)).to.deep.equal(["a1", "a2"]);
+    expect(fetchMock.getCall(0).args[0]).to.equal(
+      "https://api.example.com/agents/connection_history?agent_id=a1&agent_id=a2&after=1&bucket_ms=3600000&include_segments=true",
+    );
+
+    // 300 agents → 2 chunks; the shared window's buckets are summed.
+    const agentIds = Array.from({ length: 300 }, (_, i) => `b${String(i).padStart(3, "0")}`);
+    const big = await api.getMultiAgentConnectionHistory({ agent_id: agentIds, bucket_ms: 3_600_000 });
+    expect(fetchMock.callCount).to.equal(3);
+    expect(big.agents).to.have.length(300);
+    expect(big.agents[0].id).to.equal("b000");
+    expect(big.buckets?.[0].online).to.equal(300);
+    expect(big.buckets?.[1].offline).to.equal(2);
+    expect(big.buckets?.[1].went_down).to.deep.equal(["b000", "b250"]);
+  });
+
+  it("fetches message counts and sums chunk totals by day", async () => {
+    const { rest, fetchMock } = setupRest((url) => {
+      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      return createJsonResponse({
+        start: 0,
+        end: 172_800_000,
+        agents: ids.map((id) => ({ id, days: [{ start: 0, count: 2 }] })),
+        totals: [
+          { start: 0, count: ids.length * 2 },
+          { start: 86_400_000, count: ids.length },
+        ],
+      });
+    });
+    const api = new AgentsApi(rest);
+
+    const small = await api.getMultiAgentMessageCounts("tag_values", { agent_id: ["a1"], before: "9" });
+    expect(small.totals).to.deep.equal([
+      { start: 0, count: 2 },
+      { start: 86_400_000, count: 1 },
+    ]);
+    expect(fetchMock.getCall(0).args[0]).to.equal(
+      "https://api.example.com/agents/channels/tag_values/messages/counts?agent_id=a1&before=9",
+    );
+
+    const agentIds = Array.from({ length: 300 }, (_, i) => `b${i}`);
+    const big = await api.getMultiAgentMessageCounts("tag_values", { agent_id: agentIds });
+    expect(big.agents).to.have.length(300);
+    expect(big.totals).to.deep.equal([
+      { start: 0, count: 600 },
+      { start: 86_400_000, count: 300 },
+    ]);
+  });
+
   it("chunks getMultiAgentMessages over the per-request agent cap", async () => {
     const baseTs = new Date("2026-01-01T00:00:00Z");
     const { rest, fetchMock } = setupRest((url) => {
