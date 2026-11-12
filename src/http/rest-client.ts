@@ -4,6 +4,7 @@ import type { AuthConfig } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
 import type { DooverStatsCollector } from "../client/stats.js";
 import { DooverApiError, DooverMfaRequiredError, isMfaRequiredBody } from "./errors.js";
+import { viewAsSession } from "../utils/view-as.js";
 
 export interface DooverClientConfig extends AuthConfig {
   networkStatus?: NetworkStatusSource;
@@ -42,6 +43,10 @@ export interface RequestOptions {
   body?: BodyInit | object | null;
   headers?: HeadersInit;
   omitSharingHeader?: boolean;
+  omitOrganisationHeader?: boolean;
+  /** Read a successful response as this, whatever its content type. */
+  responseType?: "blob" | "text";
+  signal?: AbortSignal;
 }
 
 type QueryValue =
@@ -107,7 +112,7 @@ export class RestClient {
     await this.prepareAuth();
     const request = this.prepareRequest(options);
     let response = await this.sendRequest(request);
-    let payload = await this.parseResponse(response);
+    let payload = await this.parseResponse(response, options.responseType);
 
     if (response.status === 401 && this.auth) {
       const recovered = await this.auth.handleUnauthorized();
@@ -115,7 +120,7 @@ export class RestClient {
         await this.prepareAuth();
         const retryRequest = this.prepareRequest(options);
         response = await this.sendRequest(retryRequest);
-        payload = await this.parseResponse(response);
+        payload = await this.parseResponse(response, options.responseType);
       }
     }
 
@@ -156,6 +161,7 @@ export class RestClient {
     headers: Headers;
     body: BodyInit | undefined;
     credentials: RequestCredentials;
+    signal?: AbortSignal;
   } {
     // fetch normalises GET, POST, PUT and DELETE but not PATCH, and a CORS
     // preflight compares methods case-sensitively; refine's custom calls
@@ -168,19 +174,27 @@ export class RestClient {
     if (!options.omitSharingHeader) {
       headers.set("X-Doover-Sharing", this.config.sharing);
     }
-    if (this.config.organisationId && !headers.has("X-Doover-Organisation")) {
+    if (
+      this.config.organisationId &&
+      !options.omitOrganisationHeader &&
+      !headers.has("X-Doover-Organisation")
+    ) {
       headers.set("X-Doover-Organisation", this.config.organisationId);
     }
     const impersonated = this.getImpersonatedUserId();
     if (impersonated) {
       headers.set("X-Doover-Assume", impersonated);
     }
+    const viewAs = viewAsSession();
+    if (viewAs) {
+      headers.set("X-Doover-View-As", viewAs);
+    }
 
     const credentials = this.auth
       ? this.auth.getFetchCredentials()
       : "include";
 
-    return { url, method, headers, body, credentials };
+    return { url, method, headers, body, credentials, signal: options.signal };
   }
 
   private async sendRequest(request: {
@@ -189,6 +203,7 @@ export class RestClient {
     headers: Headers;
     body: BodyInit | undefined;
     credentials: RequestCredentials;
+    signal?: AbortSignal;
   }): Promise<Response> {
     // Merge auth headers immediately before fetch so a retry can use refreshed
     // credentials without mutating the first request's Headers instance.
@@ -206,6 +221,7 @@ export class RestClient {
         headers: request.headers,
         body: request.body,
         credentials: request.credentials,
+        signal: request.signal,
       });
     } catch (error) {
       // Auth preparation, HTTP errors and JSON parsing are outside this boundary.
@@ -252,7 +268,10 @@ export class RestClient {
   private buildUrl(baseUrl: string, path: string, query?: RequestOptions["query"]) {
     const normalizedBase = baseUrl.replace(/\/+$/, "");
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    const finalUrl = new URL(`${normalizedBase}${normalizedPath}`);
+    // A full URL as the path is used as it is.
+    const finalUrl = /^https?:\/\//.test(path)
+      ? new URL(path)
+      : new URL(`${normalizedBase}${normalizedPath}`);
     if (query) {
       for (const [key, value] of Object.entries(query as Record<string, QueryValue>)) {
         if (value === undefined || value === null) {
@@ -285,9 +304,12 @@ export class RestClient {
     return JSON.stringify(body);
   }
 
-  private async parseResponse(response: Response) {
+  private async parseResponse(response: Response, responseType?: RequestOptions["responseType"]) {
     if (response.status === 204) {
       return undefined;
+    }
+    if (response.ok && responseType) {
+      return response[responseType]();
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
