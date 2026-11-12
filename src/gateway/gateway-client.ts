@@ -3,6 +3,7 @@ import type { DooverStatsCollector } from "../client/stats.js";
 import type { DooverClientConfig } from "../http/rest-client.js";
 import { DooverGatewayError } from "../http/errors.js";
 import { addTimestampToMessage } from "../utils/snowflake.js";
+import { viewAsSession } from "../utils/view-as.js";
 import type {
   GatewayInboundMessage,
   GatewayListenerMap,
@@ -169,6 +170,13 @@ export class GatewayClient {
     const wsParams = this.auth
       ? await this.auth.prepareWebSocket(this.config.dataWssUrl, hasFactory)
       : { url: this.config.dataWssUrl };
+    // A browser WebSocket can't send headers, so the session goes in the URL.
+    const viewAs = viewAsSession();
+    if (viewAs) {
+      const url = new URL(wsParams.url);
+      url.searchParams.set("view_as", viewAs);
+      wsParams.url = url.toString();
+    }
 
     let socket: WebSocket;
     if (this.config.webSocketFactory) {

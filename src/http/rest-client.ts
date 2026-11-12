@@ -4,6 +4,7 @@ import type { AuthConfig } from "../auth/build-auth.js";
 import type { DooverAuth } from "../auth/doover-auth.js";
 import type { DooverStatsCollector } from "../client/stats.js";
 import { DooverApiError, DooverMfaRequiredError, isMfaRequiredBody } from "./errors.js";
+import { viewAsSession } from "../utils/view-as.js";
 
 export interface DooverClientConfig extends AuthConfig {
   networkStatus?: NetworkStatusSource;
@@ -174,6 +175,10 @@ export class RestClient {
     const impersonated = this.getImpersonatedUserId();
     if (impersonated) {
       headers.set("X-Doover-Assume", impersonated);
+    }
+    const viewAs = viewAsSession();
+    if (viewAs) {
+      headers.set("X-Doover-View-As", viewAs);
     }
 
     const credentials = this.auth
