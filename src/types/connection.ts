@@ -89,3 +89,62 @@ export interface ConnectionAggregate {
   determination?: ConnectionDetermination | null;
   config?: ConnectionConfig | null;
 }
+
+// ---- Connection history (`GET /agents/connection_history`) ----
+//
+// Each agent's connection state over time, as a timeline: a fleet chart or
+// an uptime strip is one small request rather than a page through every
+// agent's messages.
+
+/**
+ * Coarse connection state over time. `Sleeping` is a `PeriodicContinuous`
+ * device between check-ins and counts as up; `Unknown` is before the
+ * agent's first message, or earlier than a truncated read reached.
+ */
+export type ConnectionHistoryState = "Online" | "Sleeping" | "Offline" | "Unknown";
+
+/** A stretch of one state. `start` inclusive, `end` exclusive, both epoch ms. */
+export interface ConnectionSegment {
+  start: number;
+  end: number;
+  state: ConnectionHistoryState;
+}
+
+/** The fleet in one time slot. Counts are by the state each agent held for most of the slot. */
+export interface ConnectionBucket {
+  /** Epoch ms, inclusive. */
+  start: number;
+  /** Epoch ms, exclusive. */
+  end: number;
+  online: number;
+  sleeping: number;
+  offline: number;
+  unknown: number;
+  /** Agents that went from down to up at least once inside the slot. */
+  came_up: string[];
+  /** Agents that went from up to down at least once inside the slot; a flapping agent is in both lists. */
+  went_down: string[];
+}
+
+export interface AgentConnectionHistory {
+  id: string;
+  state_at_start: ConnectionHistoryState;
+  state_at_end: ConnectionHistoryState;
+  /** Share of the known time the agent was up (online or asleep); null when nothing is known. */
+  uptime: number | null;
+  /** Some day in the window had more status changes than the server reads; its earliest stretch is unknown. */
+  truncated: boolean;
+  /** Present only when requested with `include_segments`. */
+  segments?: ConnectionSegment[];
+}
+
+export interface ConnectionHistoryResponse {
+  /** Epoch ms, inclusive. */
+  start: number;
+  /** Epoch ms, exclusive; the requested `before` clipped to now. */
+  end: number;
+  /** Sorted by id. Agents the caller cannot read are absent. */
+  agents: AgentConnectionHistory[];
+  /** Present only when requested with `bucket_ms`. */
+  buckets?: ConnectionBucket[];
+}

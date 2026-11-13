@@ -1,9 +1,17 @@
 import type {
   AgentAggregate,
+  AgentMessageCounts,
   BatchAggregatesResponse,
   BatchMessagesResponse,
+  DayCount,
+  MessageCountsResponse,
   MessageStructure,
 } from "../types/openapi.js";
+import type {
+  AgentConnectionHistory,
+  ConnectionBucket,
+  ConnectionHistoryResponse,
+} from "../types/connection.js";
 import type {
   Agent,
   AgentsResponse,
@@ -159,6 +167,27 @@ export interface DeviceTokenResponse {
   token: string;
   /** Unix-ms issuance time, which is what the revocation floor compares against. */
   issued_at_ms: number | null;
+}
+
+export interface ConnectionHistoryParams {
+  agent_id: string[];
+  /** Snowflake id bounds. Defaults to the last 7 days; at most 31 days apart. */
+  before?: string;
+  after?: string;
+  /**
+   * Slot width in ms for the fleet `buckets` series (at least 60 000, and
+   * no more than 1000 slots across the window). Omit for no buckets.
+   */
+  bucket_ms?: number;
+  /** Include each agent's state segments. The server allows this for at most 25 agents per call. */
+  include_segments?: boolean;
+}
+
+export interface MultiAgentMessageCountsParams {
+  agent_id: string[];
+  /** Snowflake id bounds. Defaults to the last 7 days; at most 92 days apart. */
+  before?: string;
+  after?: string;
 }
 
 export interface MultiAgentAggregatesParams {
@@ -413,6 +442,51 @@ export class AgentsApi {
   }
 
   /**
+   * Connection state over time for many agents in one request: per-agent
+   * summaries (and segments on request) plus an optional fleet series of
+   * who was up, and who came and went, per slot. Auto-chunks `agent_id`
+   * like the other multi-agent reads; every chunk shares the window, so
+   * their buckets line up and are summed.
+   */
+  async getMultiAgentConnectionHistory(
+    params: ConnectionHistoryParams,
+  ): Promise<ConnectionHistoryResponse> {
+    const path = "/agents/connection_history";
+    const { agent_id, ...rest } = params;
+    if (agent_id.length <= MULTI_AGENT_CHUNK_SIZE) {
+      return this.rest.get<ConnectionHistoryResponse>(path, params);
+    }
+    const responses = await Promise.all(
+      chunkAgentIds(agent_id).map((chunk) =>
+        this.rest.get<ConnectionHistoryResponse>(path, { ...rest, agent_id: chunk }),
+      ),
+    );
+    return mergeConnectionHistory(responses);
+  }
+
+  /**
+   * Messages stored per UTC day on a channel for many agents, with fleet
+   * totals. Cheap enough to ask for a quarter at a time. Auto-chunks
+   * `agent_id`; totals are summed across chunks.
+   */
+  async getMultiAgentMessageCounts(
+    channelName: string,
+    params: MultiAgentMessageCountsParams,
+  ): Promise<MessageCountsResponse> {
+    const path = `/agents/channels/${channelName}/messages/counts`;
+    const { agent_id, ...rest } = params;
+    if (agent_id.length <= MULTI_AGENT_CHUNK_SIZE) {
+      return this.rest.get<MessageCountsResponse>(path, params);
+    }
+    const responses = await Promise.all(
+      chunkAgentIds(agent_id).map((chunk) =>
+        this.rest.get<MessageCountsResponse>(path, { ...rest, agent_id: chunk }),
+      ),
+    );
+    return mergeMessageCounts(responses);
+  }
+
+  /**
    * Batch-fetch aggregates for many agents. Auto-chunks `agent_id` so each
    * request's URL stays under CloudFront's hard 8,192-byte URL quota — each
    * agent contributes ~30 chars (`agent_id=<snowflake>&`), so the chunk size
@@ -429,12 +503,8 @@ export class AgentsApi {
     if (agent_id.length <= MULTI_AGENT_CHUNK_SIZE) {
       return this.rest.get<BatchAggregatesResponse>(path, params);
     }
-    const chunks: string[][] = [];
-    for (let i = 0; i < agent_id.length; i += MULTI_AGENT_CHUNK_SIZE) {
-      chunks.push(agent_id.slice(i, i + MULTI_AGENT_CHUNK_SIZE));
-    }
     const responses = await Promise.all(
-      chunks.map((chunk) =>
+      chunkAgentIds(agent_id).map((chunk) =>
         this.rest.get<BatchAggregatesResponse>(path, {
           ...rest,
           agent_id: chunk,
@@ -654,3 +724,74 @@ export class AgentsApi {
 // is ~7.5KB of query string — comfortably under the cap with room for the
 // base URL and any `field_name` params.
 const MULTI_AGENT_CHUNK_SIZE = 250;
+
+function chunkAgentIds(agentIds: string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < agentIds.length; i += MULTI_AGENT_CHUNK_SIZE) {
+    chunks.push(agentIds.slice(i, i + MULTI_AGENT_CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+function byId<T extends { id: string }>(a: T, b: T): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * Combine several connection-history responses for the same window into one:
+ * agents concatenated, and each slot's counts and movers summed across the
+ * responses. Used to reassemble a chunked request, and by `MultiplexClient`
+ * to combine members.
+ */
+export function mergeConnectionHistory(
+  responses: ConnectionHistoryResponse[],
+): ConnectionHistoryResponse {
+  const first = responses[0];
+  if (!first) return { start: 0, end: 0, agents: [] };
+  const agents: AgentConnectionHistory[] = responses.flatMap((r) => r.agents).sort(byId);
+  const merged: ConnectionHistoryResponse = { start: first.start, end: first.end, agents };
+  if (first.buckets) {
+    merged.buckets = first.buckets.map((slot, i) => {
+      const bucket: ConnectionBucket = {
+        start: slot.start,
+        end: slot.end,
+        online: 0,
+        sleeping: 0,
+        offline: 0,
+        unknown: 0,
+        came_up: [],
+        went_down: [],
+      };
+      for (const r of responses) {
+        const b = r.buckets?.[i];
+        if (!b) continue;
+        bucket.online += b.online;
+        bucket.sleeping += b.sleeping;
+        bucket.offline += b.offline;
+        bucket.unknown += b.unknown;
+        bucket.came_up.push(...b.came_up);
+        bucket.went_down.push(...b.went_down);
+      }
+      return bucket;
+    });
+  }
+  return merged;
+}
+
+/**
+ * Combine several message-count responses for the same window into one:
+ * agents concatenated and totals summed by day.
+ */
+export function mergeMessageCounts(responses: MessageCountsResponse[]): MessageCountsResponse {
+  const first = responses[0];
+  if (!first) return { start: 0, end: 0, agents: [], totals: [] };
+  const agents: AgentMessageCounts[] = responses.flatMap((r) => r.agents).sort(byId);
+  const byDay = new Map<number, number>();
+  for (const r of responses) {
+    for (const day of r.totals) byDay.set(day.start, (byDay.get(day.start) ?? 0) + day.count);
+  }
+  const totals: DayCount[] = [...byDay.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([start, count]) => ({ start, count }));
+  return { start: first.start, end: first.end, agents, totals };
+}

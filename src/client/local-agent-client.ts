@@ -251,6 +251,8 @@ const METHOD_TO_CAPABILITY: Record<string, Capability> = {
   "agents.listAgents": "agents.list",
   "agents.getMultiAgentMessages": "agents.multiAgentMessages",
   "agents.getMultiAgentAggregates": "agents.multiAgentAggregates",
+  "agents.getMultiAgentConnectionHistory": "agents.multiAgentConnectionHistory",
+  "agents.getMultiAgentMessageCounts": "agents.multiAgentMessageCounts",
   "agents.getTokenState": "agents.tokenRead",
   "agents.setTokenPolicy": "agents.tokenManage",
   "agents.setAuthLock": "agents.tokenManage",

@@ -364,6 +364,36 @@ export class OfflineDataClient implements DataClient {
           },
         );
       }) as AgentsApiLike["getMultiAgentAggregates"],
+      getMultiAgentConnectionHistory: ((...rawArgs: unknown[]) => {
+        const { args, request } = splitRequestOptions(rawArgs);
+        const params = args[0] as { agent_id?: string[] } | undefined;
+        return this.readCached(
+          () => (target.getMultiAgentConnectionHistory as (...inner: unknown[]) => Promise<unknown>)(...this.withDelegateOptions(args, request)),
+          {
+            operation: "agents.getMultiAgentConnectionHistory",
+            kind: "agents.multiAgentConnectionHistory",
+            keyParts: ["agents", "multiAgentConnectionHistory", args],
+            channelName: "doover_connection",
+            agentId: params?.agent_id?.join(","),
+            request,
+          },
+        );
+      }) as AgentsApiLike["getMultiAgentConnectionHistory"],
+      getMultiAgentMessageCounts: ((channelName: unknown, ...rest: unknown[]) => {
+        const { args, request } = splitRequestOptions([channelName, ...rest]);
+        const params = args[1] as { agent_id?: string[] } | undefined;
+        return this.readCached(
+          () => (target.getMultiAgentMessageCounts as (...inner: unknown[]) => Promise<unknown>)(...this.withDelegateOptions(args, request)),
+          {
+            operation: "agents.getMultiAgentMessageCounts",
+            kind: "agents.multiAgentMessageCounts",
+            keyParts: ["agents", "multiAgentMessageCounts", args],
+            channelName: String(args[0]),
+            agentId: params?.agent_id?.join(","),
+            request,
+          },
+        );
+      }) as AgentsApiLike["getMultiAgentMessageCounts"],
     } as AgentsApiLike;
   }
 

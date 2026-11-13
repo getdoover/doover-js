@@ -11,6 +11,8 @@ export type Capability =
   | "agents.list"
   | "agents.multiAgentMessages"
   | "agents.multiAgentAggregates"
+  | "agents.multiAgentConnectionHistory" // getMultiAgentConnectionHistory
+  | "agents.multiAgentMessageCounts" // getMultiAgentMessageCounts
   | "agents.tokenRead" // getTokenState
   | "agents.tokenManage" // all credential mutations: policy, auth lock, revocation, minting
   // channels
@@ -58,6 +60,8 @@ export const ALL_CAPABILITIES: readonly Capability[] = [
   "agents.list",
   "agents.multiAgentMessages",
   "agents.multiAgentAggregates",
+  "agents.multiAgentConnectionHistory",
+  "agents.multiAgentMessageCounts",
   "agents.tokenRead",
   "agents.tokenManage",
   "channels.list",
