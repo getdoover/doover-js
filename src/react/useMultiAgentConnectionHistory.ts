@@ -44,7 +44,7 @@ export interface UseMultiAgentConnectionHistoryResult {
 }
 
 /**
- * Connection state over time for a set of agents, folded server-side:
+ * Connection state over time for a set of agents, in one request:
  * per-agent summaries (and segments on request) plus an optional fleet
  * series per slot. The window is part of the key, so callers that want a
  * stable cache across remounts should snap `before` to a grid rather than

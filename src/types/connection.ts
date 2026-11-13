@@ -92,10 +92,9 @@ export interface ConnectionAggregate {
 
 // ---- Connection history (`GET /agents/connection_history`) ----
 //
-// doover-data folds each agent's `doover_connection` status changes into a
-// timeline server-side (see channels-rest `connection_history.rs`), so a
-// fleet chart or an uptime strip is one small request rather than a page
-// through every agent's messages.
+// Each agent's connection state over time, as a timeline: a fleet chart or
+// an uptime strip is one small request rather than a page through every
+// agent's messages.
 
 /**
  * Coarse connection state over time. `Sleeping` is a `PeriodicContinuous`

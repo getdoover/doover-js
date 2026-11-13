@@ -36,9 +36,8 @@ export interface UseMultiAgentMessageCountsResult {
 
 /**
  * Messages stored per UTC day on a channel for a set of agents, with fleet
- * totals, from the channel's daily summaries. Cheap enough for a quarter
- * of a fleet; the window is part of the key, so snap `before` to a grid
- * for a cache that survives remounts.
+ * totals. Cheap enough for a quarter of a fleet; the window is part of
+ * the key, so snap `before` to a grid for a cache that survives remounts.
  */
 export function useMultiAgentMessageCounts(
   channelName: string,

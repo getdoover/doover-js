@@ -442,12 +442,11 @@ export class AgentsApi {
   }
 
   /**
-   * Connection state over time for many agents, folded server-side from
-   * each one's `doover_connection` channel: per-agent summaries (and
-   * segments on request) plus an optional fleet series of who was up, and
-   * who came and went, per slot. Auto-chunks `agent_id` like the other
-   * multi-agent reads; every chunk shares the window, so their buckets line
-   * up and are summed.
+   * Connection state over time for many agents in one request: per-agent
+   * summaries (and segments on request) plus an optional fleet series of
+   * who was up, and who came and went, per slot. Auto-chunks `agent_id`
+   * like the other multi-agent reads; every chunk shares the window, so
+   * their buckets line up and are summed.
    */
   async getMultiAgentConnectionHistory(
     params: ConnectionHistoryParams,
@@ -467,9 +466,8 @@ export class AgentsApi {
 
   /**
    * Messages stored per UTC day on a channel for many agents, with fleet
-   * totals, from the channel's daily summaries: no message is read, so a
-   * quarter for a fleet is cheap. Auto-chunks `agent_id`; totals are
-   * summed across chunks.
+   * totals. Cheap enough to ask for a quarter at a time. Auto-chunks
+   * `agent_id`; totals are summed across chunks.
    */
   async getMultiAgentMessageCounts(
     channelName: string,
@@ -740,7 +738,7 @@ function byId<T extends { id: string }>(a: T, b: T): number {
 }
 
 /**
- * Fold several connection-history responses for the same window into one:
+ * Combine several connection-history responses for the same window into one:
  * agents concatenated, and each slot's counts and movers summed across the
  * responses. Used to reassemble a chunked request, and by `MultiplexClient`
  * to combine members.
@@ -781,7 +779,7 @@ export function mergeConnectionHistory(
 }
 
 /**
- * Fold several message-count responses for the same window into one:
+ * Combine several message-count responses for the same window into one:
  * agents concatenated and totals summed by day.
  */
 export function mergeMessageCounts(responses: MessageCountsResponse[]): MessageCountsResponse {

@@ -79,7 +79,10 @@ export interface BatchAggregatesResponse {
 export interface DayCount {
   /** UTC day start, epoch ms. */
   start: number;
-  /** Messages retained for the day: a deleted message counts down. */
+  /**
+   * Messages written for the day, less those deleted through the API.
+   * Messages expired by retention still count.
+   */
   count: number;
 }
 
