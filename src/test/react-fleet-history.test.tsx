@@ -26,9 +26,9 @@ function makeClient() {
           { id: "a1", state_at_start: "Sleeping", state_at_end: "Online", uptime: 1, truncated: false },
           { id: "a2", state_at_start: "Offline", state_at_end: "Offline", uptime: 0, truncated: false },
         ],
-        buckets: [
-          { start: 0, end: 3_600_000, online: 1, sleeping: 0, offline: 1, unknown: 0, came_up: ["a1"], went_down: [] },
-        ],
+        events: [{ t: 1_800_000, agent_id: "a1", state: "Online" }],
+        count: 1,
+        next: null,
       });
     }
     if (url.includes("/messages/counts")) {
@@ -75,14 +75,15 @@ describe("fleet history hooks", () => {
   it("useMultiAgentConnectionHistory keys agents by id and forwards the window", async () => {
     const { client, urls } = makeClient();
     const { result } = renderHook(
-      () => useMultiAgentConnectionHistory(["a2", "a1"], { after: "5", bucketMs: 3_600_000 }),
+      () => useMultiAgentConnectionHistory(["a2", "a1"], { after: "5", minGapMs: 0 }),
       { wrapper: wrapper(client) },
     );
     await waitFor(() => expect(result.current.query.isSuccess).to.equal(true));
     expect(result.current.agentsById.a1.state_at_start).to.equal("Sleeping");
-    expect(result.current.history?.buckets?.[0].came_up).to.deep.equal(["a1"]);
+    const first = result.current.history?.events[0];
+    expect([first?.t, first?.agent_id, first?.state]).to.deep.equal([1_800_000, "a1", "Online"]);
     expect(urls[0]).to.equal(
-      "https://api.example.com/agents/connection_history?agent_id=a2&agent_id=a1&after=5&bucket_ms=3600000",
+      "https://api.example.com/agents/connection_history?agent_id=a2&agent_id=a1&limit=5000&after=5&min_gap_ms=0",
     );
   });
 
@@ -106,5 +107,21 @@ describe("fleet history hooks", () => {
     expect(urls[0]).to.equal(
       "https://api.example.com/agents/channels/tag_values/messages/counts?agent_id=a1&before=9",
     );
+  });
+
+  it("keeps the last window on show while the next one loads, when asked to", async () => {
+    const { client } = makeClient();
+    const { result, rerender } = renderHook(
+      ({ before }: { before: string }) =>
+        useMultiAgentMessageCounts("tag_values", ["a1"], { before, keepPreviousData: true, gcTime: 60_000 }),
+      { wrapper: wrapper(client), initialProps: { before: "9" } },
+    );
+    await waitFor(() => expect(result.current.query.isSuccess).to.equal(true));
+    expect(result.current.query.isPlaceholderData).to.equal(false);
+    rerender({ before: "10" });
+    // The old window's counts, flagged as standing in for the new one's.
+    expect(result.current.query.isPlaceholderData).to.equal(true);
+    expect(result.current.daysByAgent.a1.map((d) => d.count)).to.deep.equal([4]);
+    await waitFor(() => expect(result.current.query.isPlaceholderData).to.equal(false));
   });
 });

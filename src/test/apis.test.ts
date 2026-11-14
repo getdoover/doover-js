@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { describe, it } from "mocha";
 
-import { AgentsApi } from "../apis/agents-api";
+import { AgentsApi, segmentsByAgent, segmentsFor } from "../apis/agents-api";
 import { AggregatesApi } from "../apis/aggregates-api";
 import { AlarmsApi } from "../apis/alarms-api";
 import { ChannelsApi } from "../apis/channels-api";
@@ -93,47 +93,154 @@ describe("API clients", () => {
     expect(returnedIds).to.deep.equal([...agentIds].sort());
   });
 
-  it("fetches connection history and merges chunks slot by slot", async () => {
+  it("fetches connection history, pages a chunk by cursor and merges chunks", async () => {
     const { rest, fetchMock } = setupRest((url) => {
-      const ids = [...new URL(url).searchParams.getAll("agent_id")];
+      const params = new URL(url).searchParams;
+      const ids = [...params.getAll("agent_id")];
+      const cursor = params.get("cursor");
+      // The window does not move while paging, so every page says the same
+      // of the agents.
+      const agents = ids.map((id) => ({
+        id,
+        state_at_start: "Online",
+        state_at_end: "Offline",
+        uptime: 1,
+        truncated: false,
+      }));
+      // Each chunk has one event per agent at t=2h, and a second page (t=1h
+      // for its first agent) when there is more than one agent in it.
+      const events = cursor
+        ? [{ t: 3_600_000, agent_id: ids[0], state: "Sleeping" }]
+        : ids.map((id) => ({ t: 7_200_000, agent_id: id, state: "Offline" }));
       return createJsonResponse({
         start: 0,
-        end: 7_200_000,
-        agents: ids.map((id) => ({
-          id,
-          state_at_start: "Online",
-          state_at_end: "Online",
-          uptime: 1,
-          truncated: false,
-        })),
-        buckets: [
-          { start: 0, end: 3_600_000, online: ids.length, sleeping: 0, offline: 0, unknown: 0, came_up: [], went_down: [] },
-          { start: 3_600_000, end: 7_200_000, online: ids.length - 1, sleeping: 0, offline: 1, unknown: 0, came_up: [], went_down: [ids[0]] },
-        ],
+        end: 10_800_000,
+        agents,
+        events,
+        count: events.length,
+        next: !cursor && ids.length > 1 ? "72000" : null,
       });
     });
     const api = new AgentsApi(rest);
 
-    const small = await api.getMultiAgentConnectionHistory({
-      agent_id: ["a1", "a2"],
-      after: "1",
-      bucket_ms: 3_600_000,
-      include_segments: true,
-    });
-    expect(small.agents.map((a) => a.id)).to.deep.equal(["a1", "a2"]);
+    // One page: the response is passed through, cursor and all.
+    const one = await api.getMultiAgentConnectionHistory({ agent_id: ["a1"], after: "1", min_gap_ms: 0 });
+    expect(one.events).to.have.length(1);
+    expect(one.next).to.equal(null);
     expect(fetchMock.getCall(0).args[0]).to.equal(
-      "https://api.example.com/agents/connection_history?agent_id=a1&agent_id=a2&after=1&bucket_ms=3600000&include_segments=true",
+      "https://api.example.com/agents/connection_history?agent_id=a1&after=1&min_gap_ms=0",
+    );
+    const second = await api.getMultiAgentConnectionHistory({ agent_id: ["a1", "a2"], after: "1", cursor: "72000" });
+    expect(second.events.map((e) => e.t)).to.deep.equal([3_600_000]);
+    expect(fetchMock.getCall(1).args[0]).to.equal(
+      "https://api.example.com/agents/connection_history?agent_id=a1&agent_id=a2&after=1&cursor=72000",
     );
 
-    // 300 agents → 2 chunks; the shared window's buckets are summed.
+    // Two pages: the second request carries the cursor and the same window.
+    const paged = await api.getAllConnectionHistory({ agent_id: ["a1", "a2"], after: "1" });
+    expect(fetchMock.callCount).to.equal(4);
+    expect(fetchMock.getCall(2).args[0]).to.equal(
+      "https://api.example.com/agents/connection_history?agent_id=a1&agent_id=a2&limit=5000&after=1",
+    );
+    expect(fetchMock.getCall(3).args[0]).to.equal(
+      "https://api.example.com/agents/connection_history?agent_id=a1&agent_id=a2&limit=5000&after=1&cursor=72000",
+    );
+    expect(paged.events.map((e) => e.t)).to.deep.equal([7_200_000, 7_200_000, 3_600_000]);
+    expect(paged.count).to.equal(3);
+    expect(paged.next).to.equal(null);
+    expect(paged.agents.map((a) => a.id)).to.deep.equal(["a1", "a2"]);
+    expect(paged.end).to.equal(10_800_000);
+
+    // 300 agents → 2 chunks, each paged; events are merged newest first.
     const agentIds = Array.from({ length: 300 }, (_, i) => `b${String(i).padStart(3, "0")}`);
-    const big = await api.getMultiAgentConnectionHistory({ agent_id: agentIds, bucket_ms: 3_600_000 });
-    expect(fetchMock.callCount).to.equal(3);
+    const big = await api.getAllConnectionHistory({ agent_id: agentIds, after: "1" });
     expect(big.agents).to.have.length(300);
-    expect(big.agents[0].id).to.equal("b000");
-    expect(big.buckets?.[0].online).to.equal(300);
-    expect(big.buckets?.[1].offline).to.equal(2);
-    expect(big.buckets?.[1].went_down).to.deep.equal(["b000", "b250"]);
+    expect(big.events).to.have.length(302);
+    expect(big.events[0].t).to.equal(7_200_000);
+    expect(big.events.slice(-2).map((e) => e.agent_id)).to.deep.equal(["b000", "b250"]);
+    expect(big.next).to.equal(null);
+
+    // One page cannot span chunks: a wider fleet is `getAllConnectionHistory`'s.
+    const calls = fetchMock.callCount;
+    let thrown: unknown;
+    try {
+      await api.getMultiAgentConnectionHistory({ agent_id: agentIds });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).to.be.instanceOf(RangeError);
+    expect(fetchMock.callCount).to.equal(calls);
+  });
+
+  it("holds an unbounded connection-history window still while it pages", async () => {
+    const { rest, fetchMock } = setupRest((url) => {
+      const cursor = new URL(url).searchParams.get("cursor");
+      const events = [{ t: cursor ? 1_000 : 2_000, agent_id: "a1", state: "Offline" }];
+      return createJsonResponse({ start: 0, end: 3_000, agents: [], events, count: 1, next: cursor ? null : "9" });
+    });
+    const api = new AgentsApi(rest);
+    const started = Date.now();
+    await api.getAllConnectionHistory({ agent_id: ["a1"], cursor: "ignored" });
+    const [first, second] = [0, 1].map((i) => new URL(fetchMock.getCall(i).args[0] as string).searchParams);
+    // "Now" is taken once, here, rather than afresh by the server per page.
+    const before = first.get("before");
+    expect(before).to.be.a("string");
+    expect(Number((BigInt(before as string) >> 22n) + 1735689600000n)).to.be.within(started, Date.now());
+    expect(second.get("before")).to.equal(before);
+    expect(first.get("after")).to.equal(null);
+    // The read starts at the newest event whatever cursor the caller passed.
+    expect(first.get("cursor")).to.equal(null);
+    expect(second.get("cursor")).to.equal("9");
+  });
+
+  it("throws rather than return part of a connection history that never drains", async () => {
+    const { rest, fetchMock } = setupRest(() =>
+      createJsonResponse({ start: 0, end: 3_000, agents: [], events: [], count: 0, next: "9" }),
+    );
+    const api = new AgentsApi(rest);
+    let thrown: unknown;
+    try {
+      await api.getAllConnectionHistory({ agent_id: ["a1"], after: "1" });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).to.be.instanceOf(Error);
+    expect((thrown as Error).message).to.include("50 pages");
+    expect(fetchMock.callCount).to.equal(50);
+  });
+
+  it("derives agents' segments from their start state and events", async () => {
+    const history = {
+      start: 0,
+      end: 4_000,
+      agents: [
+        { id: "a", state_at_start: "Online" as const, state_at_end: "Online" as const, uptime: 0.5, truncated: false },
+        { id: "b", state_at_start: "Offline" as const, state_at_end: "Offline" as const, uptime: 0, truncated: false },
+      ],
+      events: [
+        { t: 3_000, agent_id: "a", state: "Online" as const },
+        { t: 1_000, agent_id: "a", state: "Offline" as const },
+        { t: 2_000, agent_id: "other", state: "Offline" as const },
+      ],
+      count: 3,
+      next: null as string | null,
+    };
+    const a = [
+      { start: 0, end: 1_000, state: "Online" },
+      { start: 1_000, end: 3_000, state: "Offline" },
+      { start: 3_000, end: 4_000, state: "Online" },
+    ];
+    expect(segmentsFor(history, "a")).to.deep.equal(a);
+    expect(segmentsFor(history, "missing")).to.deep.equal([]);
+    // Every agent in one pass; events for an agent not listed are left out.
+    expect(segmentsByAgent(history)).to.deep.equal({
+      a,
+      b: [{ start: 0, end: 4_000, state: "Offline" }],
+    });
+    // One page of a timeline has no older events to build segments on.
+    const page = { ...history, next: "9" };
+    expect(() => segmentsFor(page, "a")).to.throw("whole timeline");
+    expect(() => segmentsByAgent(page)).to.throw("whole timeline");
   });
 
   it("fetches message counts and sums chunk totals by day", async () => {

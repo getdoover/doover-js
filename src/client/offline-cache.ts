@@ -379,6 +379,21 @@ export class OfflineDataClient implements DataClient {
           },
         );
       }) as AgentsApiLike["getMultiAgentConnectionHistory"],
+      getAllConnectionHistory: ((...rawArgs: unknown[]) => {
+        const { args, request } = splitRequestOptions(rawArgs);
+        const params = args[0] as { agent_id?: string[] } | undefined;
+        return this.readCached(
+          () => (target.getAllConnectionHistory as (...inner: unknown[]) => Promise<unknown>)(...this.withDelegateOptions(args, request)),
+          {
+            operation: "agents.getAllConnectionHistory",
+            kind: "agents.multiAgentConnectionHistory",
+            keyParts: ["agents", "allConnectionHistory", args],
+            channelName: "doover_connection",
+            agentId: params?.agent_id?.join(","),
+            request,
+          },
+        );
+      }) as AgentsApiLike["getAllConnectionHistory"],
       getMultiAgentMessageCounts: ((channelName: unknown, ...rest: unknown[]) => {
         const { args, request } = splitRequestOptions([channelName, ...rest]);
         const params = args[1] as { agent_id?: string[] } | undefined;

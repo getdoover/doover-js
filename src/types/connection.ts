@@ -110,34 +110,36 @@ export interface ConnectionSegment {
   state: ConnectionHistoryState;
 }
 
-/** The fleet in one time slot. Counts are by the state each agent held for most of the slot. */
-export interface ConnectionBucket {
-  /** Epoch ms, inclusive. */
-  start: number;
-  /** Epoch ms, exclusive. */
-  end: number;
-  online: number;
-  sleeping: number;
-  offline: number;
-  unknown: number;
-  /** Agents that went from down to up at least once inside the slot. */
-  came_up: string[];
-  /** Agents that went from up to down at least once inside the slot; a flapping agent is in both lists. */
-  went_down: string[];
+/** One change of state in a fleet's timeline. */
+export interface ConnectionEvent {
+  /** Epoch ms. */
+  t: number;
+  agent_id: string;
+  /** The state the agent moved into. */
+  state: ConnectionHistoryState;
 }
 
 export interface AgentConnectionHistory {
   id: string;
+  /** The state carried into the window. */
   state_at_start: ConnectionHistoryState;
+  /** The state at the end of the window. */
   state_at_end: ConnectionHistoryState;
-  /** Share of the known time the agent was up (online or asleep); null when nothing is known. */
+  /**
+   * Share of the known time the agent was up (online or asleep); null when
+   * nothing is known. Measured on every change, whatever `min_gap_ms` is.
+   */
   uptime: number | null;
   /** Some day in the window had more status changes than the server reads; its earliest stretch is unknown. */
   truncated: boolean;
-  /** Present only when requested with `include_segments`. */
-  segments?: ConnectionSegment[];
 }
 
+/**
+ * One page of a fleet's connection timeline: every agent's state at each end
+ * of the window, and the changes of state inside it, newest first. Page back
+ * with the same `before`/`after` and `next` as `cursor` until it is null;
+ * the window does not move, so `agents` is the same on every page.
+ */
 export interface ConnectionHistoryResponse {
   /** Epoch ms, inclusive. */
   start: number;
@@ -145,6 +147,10 @@ export interface ConnectionHistoryResponse {
   end: number;
   /** Sorted by id. Agents the caller cannot read are absent. */
   agents: AgentConnectionHistory[];
-  /** Present only when requested with `bucket_ms`. */
-  buckets?: ConnectionBucket[];
+  /** Changes of state inside the window, newest first. */
+  events: ConnectionEvent[];
+  /** Events in this page. */
+  count: number;
+  /** Pass as `cursor` for the next page of older events; null once drained. */
+  next: string | null;
 }
