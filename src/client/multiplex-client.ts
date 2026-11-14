@@ -693,7 +693,18 @@ export class MultiplexClient implements DataClient {
         self.assertSomeMemberSupports("agents.multiAgentConnectionHistory");
         let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentConnectionHistory"));
         if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
-        const responses = await Promise.all(members.map((m) => (m.client.agents.getMultiAgentConnectionHistory as (...a: unknown[]) => Promise<ConnectionHistoryResponse>)(...args)));
+        // One member's page keeps its cursor. Several cannot share one, so
+        // each is read to the end rather than merge first pages and drop
+        // the rest unseen.
+        const responses = await Promise.all(members.map((m) => ((members.length > 1 ? m.client.agents.getAllConnectionHistory : m.client.agents.getMultiAgentConnectionHistory) as (...a: unknown[]) => Promise<ConnectionHistoryResponse>).call(m.client.agents, ...args)));
+        return mergeConnectionHistory(responses) as never;
+      },
+      async getAllConnectionHistory(...rawArgs: unknown[]) {
+        const { args, sources } = self.splitSourcesOption(rawArgs);
+        self.assertSomeMemberSupports("agents.multiAgentConnectionHistory");
+        let members = self.enabledClients().filter(({ client }) => client.supports("agents.multiAgentConnectionHistory"));
+        if (sources) { const allow = new Set(sources); members = members.filter((m) => allow.has(m.id)); }
+        const responses = await Promise.all(members.map((m) => (m.client.agents.getAllConnectionHistory as (...a: unknown[]) => Promise<ConnectionHistoryResponse>)(...args)));
         return mergeConnectionHistory(responses) as never;
       },
       async getMultiAgentMessageCounts(channelName: unknown, ...rest: unknown[]) {

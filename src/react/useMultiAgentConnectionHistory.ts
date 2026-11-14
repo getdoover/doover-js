@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import type {
   AgentConnectionHistory,
@@ -11,10 +11,19 @@ export interface UseMultiAgentConnectionHistoryOptions {
   /** Snowflake id bounds. Defaults to the last 7 days; at most 31 days apart. */
   before?: string;
   after?: string;
-  /** Slot width in ms for the fleet `buckets` series. Omit for no buckets. */
-  bucketMs?: number;
-  /** Include each agent's state segments (at most 25 agents per call). */
-  includeSegments?: boolean;
+  /** A state held shorter than this is folded into the one before it. Default one minute; 0 for every change. */
+  minGapMs?: number;
+  /**
+   * How long the result stays cached once nothing shows it, in ms: a page
+   * left and come back to within that time does not fetch again. Defaults
+   * to the query client's.
+   */
+  gcTime?: number;
+  /**
+   * While a new window or set of agents loads, keep handing back the last
+   * result, flagged by `query.isPlaceholderData`, rather than nothing.
+   */
+  keepPreviousData?: boolean;
   /** Defaults true; the query also waits for a non-empty `agentIds`. */
   enabled?: boolean;
 }
@@ -30,8 +39,7 @@ export function multiAgentConnectionHistoryQueryKey(
     {
       before: options?.before ?? null,
       after: options?.after ?? null,
-      bucket_ms: options?.bucketMs ?? null,
-      include_segments: options?.includeSegments ?? false,
+      min_gap_ms: options?.minGapMs ?? null,
     },
   ] as const;
 }
@@ -44,13 +52,13 @@ export interface UseMultiAgentConnectionHistoryResult {
 }
 
 /**
- * Connection state over time for a set of agents, in one request:
- * per-agent summaries (and segments on request) plus an optional fleet
- * series per slot. The window is part of the key, so callers that want a
- * stable cache across remounts should snap `before` to a grid rather than
- * pass a fresh "now" each render. Never stale on its own: history does
- * not change, and the trailing edge moves only as far as the caller's
- * `before` does.
+ * The whole window's connection timeline for a set of agents: each one's
+ * state at the window's start and end, and every change of state inside
+ * it, newest first, with every page already read. The window is part of
+ * the key, so callers that want a stable cache across remounts should snap
+ * `before` to a grid rather than pass a fresh "now" each render. Never
+ * stale on its own: history does not change, and the trailing edge moves
+ * only as far as the caller's `before` does.
  */
 export function useMultiAgentConnectionHistory(
   agentIds: string[],
@@ -64,13 +72,14 @@ export function useMultiAgentConnectionHistory(
     queryKey: key,
     enabled,
     staleTime: Infinity,
+    ...(options?.gcTime !== undefined ? { gcTime: options.gcTime } : {}),
+    ...(options?.keepPreviousData ? { placeholderData: keepPreviousData } : {}),
     queryFn: () =>
-      client.agents.getMultiAgentConnectionHistory({
+      client.agents.getAllConnectionHistory({
         agent_id: agentIds,
         ...(options?.before !== undefined ? { before: options.before } : {}),
         ...(options?.after !== undefined ? { after: options.after } : {}),
-        ...(options?.bucketMs !== undefined ? { bucket_ms: options.bucketMs } : {}),
-        ...(options?.includeSegments ? { include_segments: true } : {}),
+        ...(options?.minGapMs !== undefined ? { min_gap_ms: options.minGapMs } : {}),
       }),
   });
 

@@ -9,15 +9,16 @@ import type {
 } from "../types/openapi.js";
 import type {
   AgentConnectionHistory,
-  ConnectionBucket,
+  ConnectionEvent,
   ConnectionHistoryResponse,
+  ConnectionSegment,
 } from "../types/connection.js";
 import type {
   Agent,
   AgentsResponse,
   GetAgentsOptions,
 } from "../types/viewer.js";
-import { addTimestampToMessage } from "../utils/snowflake.js";
+import { addTimestampToMessage, generateSnowflakeIdAtTime } from "../utils/snowflake.js";
 import type { RestClient } from "../http/rest-client.js";
 import type { DooverRequestOptions } from "../client/request-options.js";
 
@@ -174,13 +175,16 @@ export interface ConnectionHistoryParams {
   /** Snowflake id bounds. Defaults to the last 7 days; at most 31 days apart. */
   before?: string;
   after?: string;
+  /** Events per page, 1 to 5000; default 1000. */
+  limit?: number;
+  /** A state held shorter than this is folded into the one before it. Default one minute; 0 for every change. */
+  min_gap_ms?: number;
   /**
-   * Slot width in ms for the fleet `buckets` series (at least 60 000, and
-   * no more than 1000 slots across the window). Omit for no buckets.
+   * The previous page's `next`: only events older than it are listed. Keep
+   * `before` and `after` as they were; the window does not move while
+   * paging, and the server wants at least one of them alongside a cursor.
    */
-  bucket_ms?: number;
-  /** Include each agent's state segments. The server allows this for at most 25 agents per call. */
-  include_segments?: boolean;
+  cursor?: string;
 }
 
 export interface MultiAgentMessageCountsParams {
@@ -442,24 +446,72 @@ export class AgentsApi {
   }
 
   /**
-   * Connection state over time for many agents in one request: per-agent
-   * summaries (and segments on request) plus an optional fleet series of
-   * who was up, and who came and went, per slot. Auto-chunks `agent_id`
-   * like the other multi-agent reads; every chunk shares the window, so
-   * their buckets line up and are summed.
+   * One page of connection state over time for many agents: each agent's
+   * state at the window's start and end, and the changes of state inside
+   * it, newest first. Page back by repeating the request with the same
+   * `before` and `after` and `cursor` set to the response's `next`, until
+   * `next` is null. The server refuses a `cursor` with neither bound
+   * given, since such a window starts later on every request.
+   * One request, so at most 250 agents: a cursor cannot stand for several
+   * chunks. `getAllConnectionHistory` reads any number of agents and every
+   * page.
    */
   async getMultiAgentConnectionHistory(
     params: ConnectionHistoryParams,
   ): Promise<ConnectionHistoryResponse> {
-    const path = "/agents/connection_history";
-    const { agent_id, ...rest } = params;
-    if (agent_id.length <= MULTI_AGENT_CHUNK_SIZE) {
-      return this.rest.get<ConnectionHistoryResponse>(path, params);
+    if (params.agent_id.length > MULTI_AGENT_CHUNK_SIZE) {
+      throw new RangeError(
+        `getMultiAgentConnectionHistory reads one page for at most ${MULTI_AGENT_CHUNK_SIZE} agents ` +
+          `(got ${params.agent_id.length}); use getAllConnectionHistory for a wider fleet.`,
+      );
     }
+    return this.rest.get<ConnectionHistoryResponse>("/agents/connection_history", params);
+  }
+
+  /**
+   * The whole window's connection timeline for many agents: every page of
+   * every chunk, merged, newest first, with `next` null. Chunks are read in
+   * parallel, pages within a chunk in sequence. `limit` is the page size
+   * read with (the server's largest unless given) and `cursor` is ignored:
+   * the read always starts at the newest event. Throws rather than return
+   * part of a timeline if a chunk runs past 50 pages.
+   */
+  async getAllConnectionHistory(
+    params: ConnectionHistoryParams,
+  ): Promise<ConnectionHistoryResponse> {
+    const path = "/agents/connection_history";
+    const { agent_id, cursor: _ignored, ...rest } = params;
+    // A window with neither bound moves with "now", and the server refuses
+    // to page one. Fix its end here and the same start follows each time.
+    if (rest.before === undefined && rest.after === undefined) {
+      rest.before = generateSnowflakeIdAtTime(Date.now());
+    }
+    const chunks = agent_id.length === 0 ? [[] as string[]] : chunkAgentIds(agent_id);
     const responses = await Promise.all(
-      chunkAgentIds(agent_id).map((chunk) =>
-        this.rest.get<ConnectionHistoryResponse>(path, { ...rest, agent_id: chunk }),
-      ),
+      chunks.map(async (chunk) => {
+        const pages: ConnectionHistoryResponse[] = [];
+        let cursor: string | undefined;
+        for (;;) {
+          // The largest page the server allows: every page refolds the
+          // whole window server-side, so fewer pages is cheaper.
+          const page = await this.rest.get<ConnectionHistoryResponse>(path, {
+            agent_id: chunk,
+            limit: MAX_CONNECTION_HISTORY_PAGE,
+            ...rest,
+            ...(cursor !== undefined ? { cursor } : {}),
+          });
+          pages.push(page);
+          if (!page.next) break;
+          if (pages.length >= MAX_CONNECTION_HISTORY_PAGES) {
+            throw new Error(
+              `connection history ran past ${MAX_CONNECTION_HISTORY_PAGES} pages for one chunk of agents; ` +
+                "narrow the window or raise min_gap_ms.",
+            );
+          }
+          cursor = page.next;
+        }
+        return mergeConnectionHistory(pages);
+      }),
     );
     return mergeConnectionHistory(responses);
   }
@@ -724,6 +776,10 @@ export class AgentsApi {
 // is ~7.5KB of query string — comfortably under the cap with room for the
 // base URL and any `field_name` params.
 const MULTI_AGENT_CHUNK_SIZE = 250;
+/** The server's largest page of connection events. */
+const MAX_CONNECTION_HISTORY_PAGE = 5000;
+/** Pages read for one chunk before `getAllConnectionHistory` throws: a quarter of a million events. */
+const MAX_CONNECTION_HISTORY_PAGES = 50;
 
 function chunkAgentIds(agentIds: string[]): string[][] {
   const chunks: string[][] = [];
@@ -738,44 +794,106 @@ function byId<T extends { id: string }>(a: T, b: T): number {
 }
 
 /**
- * Combine several connection-history responses for the same window into one:
- * agents concatenated, and each slot's counts and movers summed across the
- * responses. Used to reassemble a chunked request, and by `MultiplexClient`
- * to combine members.
+ * Combine connection-history responses into one: the pages of one request,
+ * the chunks of a wide one, the members of a multiplexed client, or any
+ * mix. Agents are kept from the first response they appear in (every page
+ * of one request carries the same ones) and events are concatenated newest
+ * first. `next` survives only when there is a single response, since one
+ * cursor cannot stand for several.
  */
 export function mergeConnectionHistory(
   responses: ConnectionHistoryResponse[],
 ): ConnectionHistoryResponse {
   const first = responses[0];
-  if (!first) return { start: 0, end: 0, agents: [] };
-  const agents: AgentConnectionHistory[] = responses.flatMap((r) => r.agents).sort(byId);
-  const merged: ConnectionHistoryResponse = { start: first.start, end: first.end, agents };
-  if (first.buckets) {
-    merged.buckets = first.buckets.map((slot, i) => {
-      const bucket: ConnectionBucket = {
-        start: slot.start,
-        end: slot.end,
-        online: 0,
-        sleeping: 0,
-        offline: 0,
-        unknown: 0,
-        came_up: [],
-        went_down: [],
-      };
-      for (const r of responses) {
-        const b = r.buckets?.[i];
-        if (!b) continue;
-        bucket.online += b.online;
-        bucket.sleeping += b.sleeping;
-        bucket.offline += b.offline;
-        bucket.unknown += b.unknown;
-        bucket.came_up.push(...b.came_up);
-        bucket.went_down.push(...b.went_down);
-      }
-      return bucket;
-    });
+  if (!first) return { start: 0, end: 0, agents: [], events: [], count: 0, next: null };
+  if (responses.length === 1) return first;
+  const seen = new Set<string>();
+  const agents: AgentConnectionHistory[] = [];
+  for (const r of responses) {
+    for (const a of r.agents) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      agents.push(a);
+    }
   }
-  return merged;
+  agents.sort(byId);
+  const events = responses
+    .flatMap((r) => r.events ?? [])
+    .sort((a, b) => b.t - a.t || (a.agent_id < b.agent_id ? -1 : a.agent_id > b.agent_id ? 1 : 0));
+  return {
+    start: Math.min(...responses.map((r) => r.start)),
+    end: Math.max(...responses.map((r) => r.end)),
+    agents,
+    events,
+    count: events.length,
+    next: null,
+  };
+}
+
+/**
+ * One agent's timeline as segments across the window, from its carried-in
+ * state and its events in `history`. For an uptime strip of one device; for
+ * every device at once, `segmentsByAgent` reads the events only once.
+ * Needs the whole timeline (`getAllConnectionHistory`, or the hook): throws
+ * on a page with `next` set, whose older events are not there to build on.
+ */
+export function segmentsFor(history: ConnectionHistoryResponse, agentId: string): ConnectionSegment[] {
+  assertWholeTimeline(history);
+  const agent = history.agents.find((a) => a.id === agentId);
+  if (!agent) return [];
+  return buildSegments(
+    history,
+    agent,
+    (history.events ?? []).filter((e) => e.agent_id === agentId),
+  );
+}
+
+/**
+ * Every agent's timeline as segments across the window, keyed by agent id,
+ * in one pass over the events. Same rule as `segmentsFor`: the whole
+ * timeline, not one page of it.
+ */
+export function segmentsByAgent(history: ConnectionHistoryResponse): Record<string, ConnectionSegment[]> {
+  assertWholeTimeline(history);
+  const eventsByAgent = new Map<string, ConnectionEvent[]>();
+  for (const e of history.events ?? []) {
+    const list = eventsByAgent.get(e.agent_id);
+    if (list) list.push(e);
+    else eventsByAgent.set(e.agent_id, [e]);
+  }
+  const out: Record<string, ConnectionSegment[]> = {};
+  for (const agent of history.agents) {
+    out[agent.id] = buildSegments(history, agent, eventsByAgent.get(agent.id) ?? []);
+  }
+  return out;
+}
+
+function assertWholeTimeline(history: ConnectionHistoryResponse): void {
+  if (history.next) {
+    throw new Error(
+      "segments need the whole timeline, and this is one page of it (`next` is set); " +
+        "read it with getAllConnectionHistory.",
+    );
+  }
+}
+
+function buildSegments(
+  history: ConnectionHistoryResponse,
+  agent: AgentConnectionHistory,
+  events: ConnectionEvent[],
+): ConnectionSegment[] {
+  if (history.end <= history.start) return [];
+  const changes = [...events].sort((a, b) => a.t - b.t);
+  const segments: ConnectionSegment[] = [];
+  let start = history.start;
+  let state = agent.state_at_start;
+  for (const e of changes) {
+    if (e.t > start) segments.push({ start, end: e.t, state });
+    start = Math.max(start, e.t);
+    state = e.state;
+  }
+  if (history.end > start) segments.push({ start, end: history.end, state });
+  return segments;
 }
 
 /**

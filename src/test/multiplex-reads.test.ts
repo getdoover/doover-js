@@ -90,4 +90,32 @@ describe("MultiplexClient reads", () => {
     const res = await mux.agents.listAgents();
     expect((res.agents ?? []).map((a) => a.id).sort()).to.deep.equal(["dev7", "dev8"]);
   });
+  it("connection history: one member's page keeps its cursor, several are each read to the end", async () => {
+    const historyMember = (id: string, agentId: string) => {
+      const agents = [{ id: agentId, state_at_start: "Online", state_at_end: "Offline", uptime: 0.5, truncated: false }];
+      const newest = { t: 2_000, agent_id: agentId, state: "Offline" };
+      const oldest = { t: 1_000, agent_id: agentId, state: "Online" };
+      return {
+        ...dataMember(id, { caps: ["agents.multiAgentConnectionHistory"] }),
+        agents: {
+          getMultiAgentConnectionHistory: async () => ({ start: 0, end: 3_000, agents, events: [newest], count: 1, next: "9" }),
+          getAllConnectionHistory: async () => ({ start: 0, end: 3_000, agents, events: [newest, oldest], count: 2, next: null }),
+        },
+      } as never as DataClient;
+    };
+    const solo = mk({ cloud: historyMember("cloud", "dev7") });
+    const page = await solo.agents.getMultiAgentConnectionHistory({ agent_id: ["dev7"] });
+    expect(page.next).to.equal("9");
+    expect(page.events).to.have.length(1);
+
+    const mux = mk({ cloud: historyMember("cloud", "dev7"), "local:8": historyMember("local:8", "dev8") });
+    const merged = await mux.agents.getMultiAgentConnectionHistory({ agent_id: ["dev7", "dev8"] });
+    // No cursor could stand for both, so nothing is left behind one.
+    expect(merged.next).to.equal(null);
+    expect(merged.events.map((e) => [e.t, e.agent_id])).to.deep.equal([
+      [2_000, "dev7"], [2_000, "dev8"], [1_000, "dev7"], [1_000, "dev8"],
+    ]);
+    const all = await mux.agents.getAllConnectionHistory({ agent_id: ["dev7", "dev8"] });
+    expect(all.events).to.have.length(4);
+  });
 });

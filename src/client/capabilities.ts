@@ -11,7 +11,7 @@ export type Capability =
   | "agents.list"
   | "agents.multiAgentMessages"
   | "agents.multiAgentAggregates"
-  | "agents.multiAgentConnectionHistory" // getMultiAgentConnectionHistory
+  | "agents.multiAgentConnectionHistory" // getMultiAgentConnectionHistory, getAllConnectionHistory
   | "agents.multiAgentMessageCounts" // getMultiAgentMessageCounts
   | "agents.tokenRead" // getTokenState
   | "agents.tokenManage" // all credential mutations: policy, auth lock, revocation, minting
